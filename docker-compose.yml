@@ -1,0 +1,15 @@
+# Entorno de desarrollo con Docker. NO PROBADO en el hito 1 (el entorno donde se construyó no tiene Docker):
+# se probó con scripts/dev_env.sh (PostgreSQL 16 + MariaDB 10.11). Revisar al primer uso.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust      # solo desarrollo
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports: ["55432:5432"]
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"     # solo desarrollo
+    command: ["--character-set-server=utf8mb4"]
+    ports: ["53306:3306"]

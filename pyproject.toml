@@ -1,0 +1,30 @@
+[project]
+name = "datapulso"
+version = "0.1.0"
+description = "DataPulso — plataforma de ciclo de vida del cliente (hito 1: cimientos)"
+requires-python = ">=3.11"
+dependencies = [
+  "psycopg[binary]>=3.2",
+  "pymysql>=1.1",
+  "cryptography>=42",
+  "pydantic>=2.6",
+  "numpy>=1.26",
+  "pandas>=2.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+datapulso = "datapulso.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
