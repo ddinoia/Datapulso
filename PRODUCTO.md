@@ -3,7 +3,7 @@
 Estado: decisiones de producto confirmadas por Diego el 19/11/2026 (ver sección 15). Dueño de producto: Diego. Dueño técnico: Marcelo (CTO, part-time, 20 hs por semana).
 Modo de desarrollo: todo el código lo desarrollan agentes; Marcelo lo revisa después de cada hito.
 Reemplaza como fuente de verdad a los demos HTML (que se descartan; solo valen como referencia de requisitos).
-Avance: hito 1 construido y listo para revisión de Marcelo (19/11/2026); guía en `docs/REVISION_HITO1.md`.
+Avance: hitos 1 y 2 construidos y listos para revisión de Marcelo (19/11/2026); guías en `docs/REVISION_HITO1.md` y `docs/REVISION_HITO2.md`.
 
 ## 1. Qué es
 
@@ -160,7 +160,7 @@ Salud: los datos de prueba y el producto usan solo eventos administrativos (alta
 Cada hito cierra con un paquete de revisión para Marcelo: código, pruebas, guía de lo que hay que mirar y lista de decisiones tomadas por el agente.
 
 1. Cimientos (construido, pendiente de revisión de Marcelo): esquema multi-tenant, ingesta (CSV y conector de base de datos con sincronización incremental), mapeo y validación, configuración v1, generador de datos de las tres industrias. Aceptación: cargo un CSV o conecto una base de prueba y veo KPIs y funnel calculados desde la base, con el vocabulario del tenant; la segunda sincronización trae solo lo nuevo. Evidencia: 34 pruebas automáticas, todas pasan.
-2. Motor: variables, puntaje, bandas, backtest. Aceptación: lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada.
+2. Motor (construido, pendiente de revisión de Marcelo): variables, puntaje, bandas, backtest. Aceptación: lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada. Evidencia: 13 pruebas automáticas; AUC de retención contra la verdad sembrada 0,85 (servicios), 0,76 (salud), 0,81 (financiera).
 3. Acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook. Aceptación: apruebo una campaña y obtengo la lista a ejecutar con tratamiento y control.
 4. Medición: resultados, intervalo, ROI, no concluyente. Aceptación: ciclo completo con datos de prueba; el resultado medido coincide con el efecto sembrado dentro del intervalo.
 5. Aplicación: shell único y pantallas de la sección 10, en paralelo desde el hito 1 (API con autenticación incluida; hoy solo hay línea de comandos).
@@ -191,3 +191,5 @@ Confirmadas para lo técnico (a revisar por Marcelo):
 Abiertas:
 - Revisión de Marcelo del hito 1 (ver guía) y sus decisiones sobre los puntos marcados por el agente (por ejemplo, versionar el mapeo, cargas por lotes con reanudación).
 - Probar el conector contra MySQL 8 real (se probó con MariaDB 10.11).
+- Revisión de Marcelo del hito 2 (ver `docs/REVISION_HITO2.md`).
+- Para Diego (propuestas del agente en el hito 2, ver la guía, sección 3): qué predice el puntaje de cada etapa (puntaje alto = prioridad alta: riesgo de baja, de pago fuera de término y de no activar; oportunidad en uso y valor); horizonte de predicción por etapa (campo `ventana_prediccion_dias`, por defecto la ventana de medición); bandas por terciles de cada día o umbrales fijos de probabilidad.

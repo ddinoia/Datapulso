@@ -1,7 +1,7 @@
 [project]
 name = "datapulso"
-version = "0.1.0"
-description = "DataPulso — plataforma de ciclo de vida del cliente (hito 1: cimientos)"
+version = "0.2.0"
+description = "DataPulso — plataforma de ciclo de vida del cliente (hito 2: motor de puntaje)"
 requires-python = ">=3.11"
 dependencies = [
   "psycopg[binary]>=3.2",
@@ -10,6 +10,7 @@ dependencies = [
   "pydantic>=2.6",
   "numpy>=1.26",
   "pandas>=2.2",
+  "scikit-learn>=1.4",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +25,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+datapulso = ["textos/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,4 +1,4 @@
-"""Línea de comandos del hito 1:  python -m datapulso <comando>   (o `datapulso <comando>`)
+"""Línea de comandos:  python -m datapulso <comando>   (o `datapulso <comando>`)
 
   migrar                         crea la base, el rol de la app y aplica migraciones
   generar-datos  INDUSTRIA       genera CSV de prueba (servicios | salud | financiera)
@@ -6,6 +6,14 @@
   kpis TENANT                    muestra KPIs y funnel calculados desde la base (TENANT = nombre o id)
   calidad TENANT                 resumen de calidad y últimas cargas
   config-pendientes TENANT       qué falta configurar (ROI obligatorio)
+
+Hito 2 (motor de puntaje):
+  puntuar TENANT                 proceso nocturno de un tenant: reentrena si hace falta y puntúa todas las etapas
+     [--etapa E] [--reentrenar] [--fecha AAAA-MM-DD]
+  puntuar-todos                  proceso nocturno para todos los tenants (lo que correría el programador de tareas)
+  modelo TENANT --etapa E        versión vigente del modelo: qué predice, método y calidad del backtest
+  clientes TENANT --etapa E      lista de clientes con puntaje, banda y drivers
+     [--banda alta|media|baja] [--limite N]
 """
 import argparse
 import json
@@ -49,6 +57,12 @@ def main(argv=None) -> None:
     d.add_argument("--semilla", type=int, default=7); d.add_argument("--estilo", default="iso", choices=["iso", "ar"])
     for n in ("kpis", "calidad", "config-pendientes"):
         x = sp.add_parser(n); x.add_argument("tenant")
+    pu = sp.add_parser("puntuar"); pu.add_argument("tenant"); pu.add_argument("--etapa")
+    pu.add_argument("--reentrenar", action="store_true"); pu.add_argument("--fecha", type=date.fromisoformat)
+    pt = sp.add_parser("puntuar-todos"); pt.add_argument("--reentrenar", action="store_true")
+    mo = sp.add_parser("modelo"); mo.add_argument("tenant"); mo.add_argument("--etapa", required=True)
+    cl = sp.add_parser("clientes"); cl.add_argument("tenant"); cl.add_argument("--etapa", required=True)
+    cl.add_argument("--banda", choices=["alta", "media", "baja"]); cl.add_argument("--limite", type=int, default=20)
     a = ap.parse_args(argv)
 
     if a.cmd == "migrar":
@@ -91,6 +105,77 @@ def main(argv=None) -> None:
             print(f"config v{v}: " + ("completa" if not p else f"{len(p)} pendientes"))
             for x in p:
                 print(" -", x)
+    elif a.cmd == "puntuar":
+        from .puntaje import motor
+        with tenant_conn(_tenant_id(a.tenant)) as c:
+            if a.etapa:
+                m = motor.modelo_vigente(c, a.etapa)
+                if a.reentrenar or not m or not motor.vigente_para_variables(m):
+                    m = motor.entrenar(c, a.etapa, a.fecha)
+                res = [motor.puntuar(c, a.etapa, a.fecha, m["version"])]
+                c.commit()
+            else:
+                res = motor.proceso_nocturno(c, a.fecha, forzar_entrenamiento=a.reentrenar)
+            _imprimir_puntuacion(c, res)
+    elif a.cmd == "puntuar-todos":
+        from .puntaje import motor
+        with admin_conn() as c:
+            tenants = [(str(r["id"]), r["nombre"]) for r in c.execute("SELECT id, nombre FROM tenants ORDER BY nombre")]
+        for tid, nombre in tenants:
+            print(f"\n== {nombre}")
+            try:
+                with tenant_conn(tid) as c:
+                    _imprimir_puntuacion(c, motor.proceso_nocturno(c, forzar_entrenamiento=a.reentrenar))
+            except Exception as e:  # un tenant con problemas no frena a los demás
+                print(f"  error: {e}")
+    elif a.cmd == "modelo":
+        from .puntaje import motor, presentacion
+        with tenant_conn(_tenant_id(a.tenant)) as c:
+            m = motor.modelo_vigente(c, a.etapa)
+            if not m:
+                sys.exit(f"No hay modelo para '{a.etapa}': correr `datapulso puntuar {a.tenant}`")
+            from .tenants import config_activa
+            print("\n".join(presentacion.resumen_modelo(m, config_activa(c)[1].vocabulario.cliente)))
+            if m["metodo"] == "modelo":
+                print("  Variables con más peso (coeficiente sobre la variable estandarizada):")
+                coef = sorted(m["parametros"]["coef"].items(), key=lambda kv: -abs(kv[1]))[:10]
+                for k, v in coef:
+                    nombre = k.split("=")[0]
+                    nivel = f" = {k.split('=', 1)[1]}" if "=" in k else ""
+                    print(f"    {v:+.2f}  {presentacion.etiqueta_variable(nombre)}{nivel}")
+    elif a.cmd == "clientes":
+        from .puntaje import motor, presentacion
+        from .tenants import config_activa
+        from .textos import t
+        with tenant_conn(_tenant_id(a.tenant)) as c:
+            _, cfg = config_activa(c)
+            filas = motor.lista_clientes(c, a.etapa, a.banda, a.limite)
+            if not filas:
+                sys.exit(f"No hay puntajes de '{a.etapa}': correr `datapulso puntuar {a.tenant}`")
+            f0 = filas[0]
+            print(f"\n{cfg.vocabulario.clientes} · {cfg.vocabulario.etapas.get(a.etapa, a.etapa)} · {f0['fecha']} · "
+                  f"{f0['modelo_version']} ({t('metodo.' + f0['metodo'])}) · config v{f0['config_version']}")
+            seg = cfg.segmento_atributo
+            for f in filas:
+                extra = f" · {seg}: {f['atributos'].get(seg)}" if seg and f["atributos"].get(seg) else ""
+                emp = f" · empresa {f['empresa']}" if f["empresa"] else ""
+                print(f"\n  {f['id_externo']}  {cfg.vocabulario.puntaje} {float(f['puntaje']):.3f}  "
+                      f"{t('banda.' + f['banda'])}{extra}{emp}")
+                for d in f["drivers"][:3]:
+                    print(f"     - {presentacion.texto_driver(d)}")
+
+
+def _imprimir_puntuacion(conn, res: list[dict]) -> None:
+    from .puntaje import motor, presentacion
+    from .tenants import config_activa
+    cliente = config_activa(conn)[1].vocabulario.cliente
+    for r in res:
+        if "omitida" in r:
+            print(f"  {r['etapa']}: omitida ({r['omitida']})")
+            continue
+        print(f"\n  {r['etapa']}: {r['puntuados']} puntuados al {r['fecha']} · bandas {r.get('bandas')}"
+              + (" · modelo reentrenado" if r.get("entrenado") else ""))
+        print("\n".join("  " + x for x in presentacion.resumen_modelo(motor.obtener_modelo(conn, r["modelo_version"]), cliente)))
 
 
 if __name__ == "__main__":
