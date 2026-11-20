@@ -26,11 +26,24 @@
     "impagas_vencidas": "Comprobantes vencidos impagos",
     "atributo": "{atributo}"
   },
+  "probabilidad": {
+    "valor": "probabilidad {pct} %",
+    "no_disponible": "sin probabilidad (regla simple: el puntaje ordena, no estima)"
+  },
+  "calibracion": {
+    "cumple": "dentro de la tolerancia",
+    "no_cumple": "fuera de la tolerancia",
+    "no_evaluable": "no evaluable (pocos clientes por banda)",
+    "metodo_ninguna": "sin ajuste",
+    "metodo_platt": "ajustada con Platt"
+  },
   "sentido": {"sube": "sube el puntaje", "baja": "baja el puntaje"},
   "calidad": {
     "sin_historia": "No hay historia suficiente para un backtest temporal",
     "pocos_eventos": "Pocos casos para entrenar: {n} clientes, {pos} con el evento y {neg} sin el evento (mínimo 200, 30 y 30)",
     "no_evaluable": "El período de evaluación tiene pocos casos: la calidad no se puede medir con confianza",
-    "modelo_peor_que_regla": "En el backtest el modelo no supera a la regla simple: revisar datos y configuración"
+    "modelo_peor_que_regla": "En el backtest el modelo no supera a la regla simple: revisar datos y configuración",
+    "calibracion_no_evaluable": "Pocos clientes por banda en la evaluación: no se puede afirmar que la probabilidad esté calibrada",
+    "mal_calibrado": "En el backtest la probabilidad predicha se aparta de la observada más de lo tolerado (error máximo {error} puntos): tomar la probabilidad como orientativa"
   }
 }

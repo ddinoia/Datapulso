@@ -73,8 +73,97 @@ def predecir(p: dict, X: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
     Z = ((D[cols] - pd.Series(p["media"])[cols]) / pd.Series(p["escala"])[cols]).fillna(0.0)
     contrib = Z * pd.Series(p["coef"])[cols]
     logit = p["intercepto"] + contrib.sum(axis=1)
+    cal = p.get("calibracion") or {}
+    if cal.get("metodo") == "platt":
+        # logit calibrado = a·logit + b: los drivers se escalan por `a` para seguir sumando el logit final
+        logit = cal["a"] * logit + cal["b"]
+        contrib = contrib * cal["a"]
     agrupado = contrib.T.groupby(_grupo).sum().T
     return (1.0 / (1.0 + np.exp(-logit.values))), agrupado
+
+
+# ---------------------------------------------------------------- calibración
+TOLERANCIA_PP = 0.03     # error tolerado por banda: máx(3 puntos porcentuales, 2 errores estándar)
+MIN_CAL = 10             # casos mínimos de cada clase para medir o ajustar la calibración
+MIN_BANDA_CAL = 50       # con menos clientes por banda la medición no permite afirmar nada: "no evaluable"
+
+
+def bandas_terciles(p: np.ndarray) -> np.ndarray:
+    """Terciles por orden (empates resueltos por orden de llegada): tercio superior = alta."""
+    if len(p) == 0:
+        return np.array([], dtype=object)
+    r = pd.Series(p).rank(method="first", ascending=False).values
+    n = len(p)
+    return np.where(r <= np.ceil(n / 3), "alta", np.where(r <= np.ceil(2 * n / 3), "media", "baja"))
+
+
+def calibracion(y: pd.Series, p: np.ndarray) -> dict:
+    """Probabilidad predicha promedio contra tasa observada, por banda. Cumple si en cada banda
+    |predicho − observado| ≤ máx(TOLERANCIA_PP, 2·√(p(1−p)/n)), con p = probabilidad predicha promedio: 3 puntos es
+    el error que importa para el negocio, y los 2 errores estándar (bajo la hipótesis "el modelo está calibrado")
+    evitan reprobar por puro ruido cuando la banda es chica. Con menos de MIN_BANDA_CAL clientes en alguna banda,
+    o menos de MIN_CAL casos de cada clase, la medición es "no evaluable"."""
+    yv = y.values.astype(float)
+    b = bandas_terciles(p)
+    filas = []
+    for k in ("alta", "media", "baja"):
+        m = b == k
+        n = int(m.sum())
+        if not n:
+            continue
+        o, pr = float(yv[m].mean()), float(p[m].mean())
+        tol = max(TOLERANCIA_PP, 2 * float(np.sqrt(max(pr * (1 - pr), 1e-9) / n)))
+        filas.append({"banda": k, "n": n, "predicho": round(pr, 4), "observado": round(o, 4),
+                      "error": round(pr - o, 4), "tolerancia": round(tol, 4), "cumple": bool(abs(pr - o) <= tol)})
+    pos, neg = int(yv.sum()), int(len(yv) - yv.sum())
+    return {"por_banda": filas, "error_max": round(max((abs(f["error"]) for f in filas), default=0.0), 4),
+            "cumple": all(f["cumple"] for f in filas),
+            "evaluable": pos >= MIN_CAL and neg >= MIN_CAL and all(f["n"] >= MIN_BANDA_CAL for f in filas)}
+
+
+def ajustar_platt(y: pd.Series, p: np.ndarray) -> dict:
+    """Platt: regresión logística de la etiqueta sobre el logit del modelo (dos parámetros, a y b)."""
+    pc = np.clip(p, 1e-6, 1 - 1e-6)
+    lg = np.log(pc / (1 - pc)).reshape(-1, 1)
+    lr = LogisticRegression(C=1e6, max_iter=1000).fit(lg, y.values.astype(int))
+    return {"metodo": "platt", "a": float(lr.coef_[0][0]), "b": float(lr.intercept_[0])}
+
+
+def ajustar_calibrado(Xtr: pd.DataFrame, ytr: pd.Series, Xcal: pd.DataFrame, ycal: pd.Series) -> dict:
+    """Ajusta el modelo con el entrenamiento y mide su calibración en los cortes de calibración (posteriores, que el
+    modelo no vio). Platt se aplica solo si (1) el modelo crudo no cumple la tolerancia y (2) Platt mejora fuera de
+    muestra: ajustado con los cortes de calibración más viejos, tiene que bajar el error en el más reciente. En
+    los datos de prueba un Platt ajustado sin esa validación perseguía la variación de un mes y empeoraba."""
+    p = ajustar(Xtr, ytr)
+    if Xcal.empty:
+        p["calibracion"] = {"metodo": "ninguna", "motivo": "sin_corte_de_calibracion"}
+        return p
+    crudo, _ = predecir(p, Xcal)
+    med = calibracion(ycal, crudo)
+    base = {"medicion_cruda": med}
+    if not med["evaluable"]:
+        p["calibracion"] = {"metodo": "ninguna", "motivo": "no_evaluable", **base}
+        return p
+    if med["cumple"]:
+        p["calibracion"] = {"metodo": "ninguna", "motivo": "cumple_tolerancia", **base}
+        return p
+    corte = pd.Series([i.split("|", 1)[0] for i in Xcal.index], index=Xcal.index)
+    ultimo = corte == corte.max()
+    if ultimo.all() or (~ultimo).sum() == 0:
+        p["calibracion"] = {"metodo": "ninguna", "motivo": "sin_validacion_posible", **base}
+        return p
+    viejo = ajustar_platt(ycal[~ultimo], crudo[~ultimo.values])
+    lg = np.log(np.clip(crudo[ultimo.values], 1e-6, 1 - 1e-6) / (1 - np.clip(crudo[ultimo.values], 1e-6, 1 - 1e-6)))
+    con_platt = 1 / (1 + np.exp(-(viejo["a"] * lg + viejo["b"])))
+    err_crudo = calibracion(ycal[ultimo], crudo[ultimo.values])["error_max"]
+    err_platt = calibracion(ycal[ultimo], con_platt)["error_max"]
+    validacion = {"error_sin_platt": err_crudo, "error_con_platt": err_platt}
+    if err_platt < err_crudo:
+        p["calibracion"] = {**ajustar_platt(ycal, crudo), "motivo": "no_cumple_tolerancia",
+                            "validacion": validacion, **base}
+    else:
+        p["calibracion"] = {"metodo": "ninguna", "motivo": "platt_no_mejora", "validacion": validacion, **base}
+    return p
 
 
 # ---------------------------------------------------------------- regla simple

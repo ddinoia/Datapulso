@@ -100,6 +100,10 @@ def generar(industria: str, semilla: int = 7, n_clientes: int | None = None, cor
             lam = lam * (cae if te.respuesta_pre_baja == "cae" else sube if te.respuesta_pre_baja == "sube" else 1.0)
             if te.respuesta_pre_baja == "cae":
                 lam = lam * arranque
+            # la tasa es mensual: un ciclo cortado (el último antes del corte o de la baja) dura `span` días y debe
+            # recibir la parte proporcional. Sin esto, los últimos días de la historia quedaban con actividad inflada
+            # (corregido en el cierre del hito 2; ver docs/REVISION_HITO2.md).
+            lam = lam * span / 30.0
             cnt = rng.poisson(lam)
             tot = int(cnt.sum())
             if not tot:

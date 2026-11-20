@@ -9,7 +9,8 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las gu�
 
 ## Estado
 - Hito 1 (cimientos) construido y pendiente de revisión de Marcelo.
-- Hito 2 (motor de puntaje) construido y pendiente de revisión de Marcelo; tiene decisiones de producto marcadas [Diego] en `docs/REVISION_HITO2.md`, sección 3.
+- Hito 1 verificado por Diego en Windows con Docker Desktop el 20/11/2026 (demo por CSV, KPIs y calidad de datos).
+- Hito 2 (motor de puntaje) construido y pendiente de revisión de Marcelo. Sus tres decisiones de producto las aprobó Diego el 20/11/2026 (qué predice cada puntaje, horizonte por etapa, bandas por terciles con la probabilidad siempre al lado). Calibración medida y documentada en `docs/REVISION_HITO2.md`.
 - Siguiente: hito 3 (acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook). Criterio de aceptación en `PRODUCTO.md`, sección 14.
 
 ## Reglas que no se rompen
@@ -22,6 +23,8 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las gu�
 - La configuración es versionada e inmutable: se crea otra versión, no se edita. Lo mismo los modelos de puntaje.
 - Una variable del puntaje "a la fecha c" usa solo lo conocido al final del día c (sin fuga). Si cambiás el cálculo de una variable, subí `VERSION_VARIABLES` en `puntaje/variables.py`.
 - Textos de producto nuevos van en `src/datapulso/textos/es.json`, no en el código.
+- La banda de un puntaje se muestra siempre con su probabilidad al lado; con la regla simple se dice que no hay probabilidad.
+- No afirmes en las guías más de lo verificado: distinguí lo que probó el agente, lo que verificó Diego y lo que nadie probó.
 
 ## Cómo correr
 ```bash
@@ -30,9 +33,9 @@ scripts/dev_env.sh start      # PostgreSQL 16 (55432) y MariaDB/MySQL (53306) lo
                                # si falta MariaDB: apt-get install -y mariadb-server)
 export DATAPULSO_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 datapulso migrar
-pytest                         # 47 pruebas (34 del hito 1 + 13 del hito 2), ≈ 3 min
+pytest                         # 51 pruebas (35 en archivos del hito 1 + 16 del hito 2), ≈ 3 min
 ```
-Si no tenés Docker ni permisos de root, adaptá `scripts/dev_env.sh` o usá `docker-compose.yml` (no probado).
+Si no tenés permisos de root, adaptá `scripts/dev_env.sh` o usá `docker compose up -d`. En Windows: README, sección "Windows (PowerShell)".
 
 ## Al cerrar un hito
 Actualizá `docs/REVISION_HITO<n>.md` con: evidencia de cada criterio de aceptación, decisiones tomadas por el agente (ordenadas por impacto), qué no está y qué no se pudo probar. Sé explícito con lo que no probaste.

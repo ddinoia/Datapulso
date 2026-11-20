@@ -33,6 +33,14 @@ def _valor(nombre: str, v) -> str:
     return _num(v)
 
 
+def texto_banda(banda: str, puntaje: float, metodo: str) -> str:
+    """La banda siempre va con la probabilidad al lado (decisión de Diego, 20/11/2026): 'Alta prioridad · 26,5 %'.
+    Con la regla simple el puntaje es un percentil, no una probabilidad: se dice explícitamente."""
+    if metodo == "modelo":
+        return f"{t('banda.' + banda)} · {t('probabilidad.valor', pct=_num(100 * float(puntaje), 1))}"
+    return f"{t('banda.' + banda)} · {t('probabilidad.no_disponible')}"
+
+
 def texto_driver(d: dict) -> str:
     """'Eventos «uso» en los últimos 90 días: 4 (promedio 38,2) · sube el puntaje'"""
     nombre = d["variable"]
@@ -60,6 +68,15 @@ def resumen_modelo(m: dict, cliente: str = "cliente") -> list[str]:
         bandas = " · ".join(f"{t('banda.' + x['banda'])} {_num(100 * x['tasa'], 1)} %" for x in b["por_banda"] if x["tasa"] is not None)
         out.append(f"  Backtest {k} (evaluado en el corte {ce}, {b['n']} clientes, tasa del evento "
                    f"{_num(100 * b['tasa_base'], 1)} %): AUC {auc} · {bandas}")
+    c = (bt.get("modelo") or {}).get("calibracion")
+    if c:
+        aplicada = bt["modelo"].get("calibracion_aplicada", {}).get("metodo", "ninguna")
+        filas = " · ".join(f"{t('banda.' + f['banda'])} {_num(100 * f['predicho'], 1)} % vs {_num(100 * f['observado'], 1)} %"
+                           for f in c["por_banda"])
+        estado = (t("calibracion.no_evaluable") if not c["evaluable"]
+                  else t("calibracion.cumple") if c["cumple"] else t("calibracion.no_cumple"))
+        out.append(f"  Calibración (predicho vs observado): {filas} · error máximo {_num(100 * c['error_max'], 1)} puntos"
+                   f" · {estado} · {t('calibracion.metodo_' + aplicada)}")
     for a in cal.get("avisos", []):
         out.append(f"  Aviso: {a}")
     return out

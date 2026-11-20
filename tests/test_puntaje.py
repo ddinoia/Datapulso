@@ -113,6 +113,13 @@ def test_backtest_temporal_y_drivers_con_sentido(industria, servicios):
             assert coef.get(f"n90__{te.tipo}", 0) > 0, (te.tipo, coef)   # más reclamos => más riesgo
     assert coef["pct_tarde_180d"] > 0                   # paga tarde => más riesgo
     assert not {"eventos_90d", "monto_90d"} & set(coef)  # totales colineales fuera del modelo
+    # calibración: se mide siempre (predicho contra observado por banda, en la evaluación fuera de tiempo)
+    cal = mod["calibracion"]
+    assert cal["evaluable"] and len(cal["por_banda"]) == 3 and len(bt["cortes_calibracion"]) == 3
+    if industria == "servicios":
+        assert cal["cumple"], cal
+    # En financiera con 1.500 clientes (semilla 12) la banda alta queda fuera de la tolerancia: la tasa de bajas
+    # del período evaluado (11,7 %) salta respecto de los cortes de calibración (~7,5 %). Ver la guía del hito 2.
 
 
 def test_cobranza_usa_la_mora_previa(servicios):
@@ -166,6 +173,7 @@ def test_comando_clientes_muestra_vocabulario_del_tenant():
     out = buf.getvalue()
     assert "Afiliados · Retención" in out and "Alta prioridad" in out and "Backtest" in out
     assert "probabilidad de que el afiliado se dé de baja en los próximos 90 días" in out
+    assert "Alta prioridad · probabilidad " in out and "Calibración (predicho vs observado)" in out
     assert out.count("sube el puntaje") + out.count("baja el puntaje") >= 3
 
 
@@ -182,6 +190,7 @@ def test_regla_simple_si_los_datos_no_alcanzan():
     assert all(f["metodo"] == "regla" for f in filas)
     assert {d["variable"] for f in filas for d in f["drivers"]} <= {"dias_sin_eventos", "eventos_90d", "monto_90d"}
     assert "Regla simple" in presentacion.resumen_modelo(m)[0]
+    assert "sin probabilidad" in presentacion.texto_banda(filas[0]["banda"], filas[0]["puntaje"], "regla")
 
 
 # ---------------------------------------------------------------- versionado, reproducibilidad, aislamiento
@@ -245,3 +254,54 @@ def test_una_etapa_sin_poblacion_no_frena_el_proceso_nocturno(monkeypatch):
         res = {r["etapa"]: r for r in motor.proceso_nocturno(c)}
     assert "No hay clientes puntuables" in res["activacion"]["omitida"]
     assert res["retencion"]["puntuados"] > 0 and res["cobranza"]["puntuados"] > 0
+
+
+# ---------------------------------------------------------------- calibración (sin base de datos)
+def _sintetico(n, base_logit, semilla, cortes):
+    rng = np.random.default_rng(semilla)
+    x = rng.normal(size=n)
+    y = (rng.random(n) < 1 / (1 + np.exp(-(base_logit + 1.5 * x)))).astype(float)
+    idx = [f"{cortes[i % len(cortes)]}|e{semilla}_{i}" for i in range(n)]
+    return pd.DataFrame({"n90__uso": np.exp(x + 2)}, index=idx), pd.Series(y, index=idx)
+
+
+def test_platt_corrige_un_modelo_descalibrado():
+    """Entrenamiento con tasa base ~12 % y período reciente con ~30 %: el modelo crudo subestima, Platt pasa la
+    validación fuera de muestra (cortes viejos -> corte más reciente) y deja la probabilidad dentro de la tolerancia."""
+    from datapulso.puntaje import modelo as mo
+    Xtr, ytr = _sintetico(6000, -2.5, 1, ["2026-01-01"])
+    Xca, yca = _sintetico(6000, -1.0, 2, ["2026-03-01", "2026-04-01", "2026-05-01"])
+    Xev, yev = _sintetico(15000, -1.0, 3, ["2026-06-01"])
+    p = mo.ajustar_calibrado(Xtr, ytr, Xca, yca)
+    assert p["calibracion"]["metodo"] == "platt" and not p["calibracion"]["medicion_cruda"]["cumple"]
+    crudo, _ = mo.predecir({**p, "calibracion": None}, Xev)
+    calibrado, contrib = mo.predecir(p, Xev)
+    assert not mo.calibracion(yev, crudo)["cumple"]
+    assert mo.calibracion(yev, calibrado)["cumple"]
+    # los drivers siguen sumando el logit final después de calibrar
+    lg = np.log(calibrado / (1 - calibrado))
+    np.testing.assert_allclose(contrib.sum(axis=1).values + p["intercepto"] * p["calibracion"]["a"] + p["calibracion"]["b"], lg, rtol=1e-6)
+
+
+def test_sin_platt_si_el_modelo_ya_calibra():
+    from datapulso.puntaje import modelo as mo
+    Xtr, ytr = _sintetico(6000, -2.0, 4, ["2026-01-01"])
+    Xca, yca = _sintetico(6000, -2.0, 5, ["2026-03-01", "2026-04-01", "2026-05-01"])
+    p = mo.ajustar_calibrado(Xtr, ytr, Xca, yca)
+    assert p["calibracion"]["metodo"] == "ninguna" and p["calibracion"]["motivo"] == "cumple_tolerancia"
+
+
+# ---------------------------------------------------------------- comando tenants
+def test_comando_tenants_lista_las_organizaciones():
+    from datapulso.cli import main
+    from datapulso.tenants import crear_tenant
+    tid = crear_tenant(f"Org tenants {np.random.default_rng().integers(1e9)}", "salud", is_demo=True)
+    with tenant_conn(tid) as c:
+        nombre = c.execute("SELECT nombre FROM tenants").fetchone()["nombre"]
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        main(["tenants"])
+    linea = next(l for l in buf.getvalue().splitlines() if l.startswith(nombre))
+    assert tid in linea and " salud " in linea and " sí " in linea and " v1 " in linea
+    assert date.today().isoformat() in linea or str(date.today().year) in linea
+    assert buf.getvalue().splitlines()[0].split() == ["nombre", "id", "industria", "demo", "config", "creado"]

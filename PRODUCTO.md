@@ -1,9 +1,9 @@
 # DataPulso — Definición de producto v0.3
 
-Estado: decisiones de producto confirmadas por Diego el 19/11/2026 (ver sección 15). Dueño de producto: Diego. Dueño técnico: Marcelo (CTO, part-time, 20 hs por semana).
+Estado: decisiones de producto confirmadas por Diego el 19/11/2026 y el 20/11/2026 (ver sección 15). Dueño de producto: Diego. Dueño técnico: Marcelo (CTO, part-time, 20 hs por semana).
 Modo de desarrollo: todo el código lo desarrollan agentes; Marcelo lo revisa después de cada hito.
 Reemplaza como fuente de verdad a los demos HTML (que se descartan; solo valen como referencia de requisitos).
-Avance: hitos 1 y 2 construidos y listos para revisión de Marcelo (19/11/2026); guías en `docs/REVISION_HITO1.md` y `docs/REVISION_HITO2.md`.
+Avance: hitos 1 y 2 construidos y listos para revisión de Marcelo; guías en `docs/REVISION_HITO1.md` y `docs/REVISION_HITO2.md`. Diego verificó el hito 1 en Windows con Docker Desktop el 20/11/2026 (demo por CSV, KPIs y calidad de datos).
 
 ## 1. Qué es
 
@@ -67,7 +67,7 @@ Conector de base de datos (incluido en el MVP; implementado en el hito 1 para Po
 1. Vocabulario: cómo se llama cada concepto.
 2. Fuentes de datos y mapeo de columnas a las tablas canónicas. (Pendiente: en el hito 1 el mapeo vive en la fuente y no está versionado; versionarlo antes de la pantalla de Configuración.)
 3. Etapas activas y su definición como regla sobre eventos (ej.: "activo = al menos 3 eventos de tipo uso en 30 días").
-4. Evento objetivo de cada etapa (qué es churn, activación, pago, compra adicional) y ventana de predicción.
+4. Evento objetivo de cada etapa (qué es churn, activación, pago, compra adicional) y ventana de predicción (campo `ventana_prediccion_dias`; si falta, la ventana de medición de la etapa).
 5. Ventana de medición de cada acción.
 6. Segmentos (reglas sobre atributos) y umbrales de bandas.
 7. Catálogo de acciones (sección 7).
@@ -103,6 +103,10 @@ Recomendación inicial: reglas (banda × segmento → acciones elegibles, ordena
 ## 8. Motor de puntaje
 
 - Modelo simple y explicable por etapa (regresión logística o árboles chicos), con drivers por cliente.
+- Qué predice (confirmado el 20/11/2026): puntaje alto = prioridad alta en todas las etapas. Retención: probabilidad de baja en el horizonte. Cobranza: probabilidad de pagar fuera de término algún comprobante que vence en el horizonte. Activación: probabilidad de no activar dentro de los días de la regla. Uso y valor: probabilidad de alcanzar la regla (oportunidad). La etapa Alta no se puntúa mientras los datos no traigan los pasos del alta.
+- Horizonte por etapa: la ventana de predicción de la configuración; por defecto, la ventana de medición (en activación y uso y valor, los días de su regla).
+- Bandas por terciles de la población puntuada cada día, con la probabilidad siempre al lado de la banda. Con la regla simple no hay probabilidad y se dice explícitamente.
+- La calibración (probabilidad predicha contra tasa observada, por banda) se mide en el backtest y se informa junto con la calidad; si no cumple la tolerancia, se avisa que la probabilidad es orientativa.
 - Entrenamiento y backtest temporal (entrenar en el pasado, evaluar en el futuro); se muestra la calidad real (por ejemplo, tasa del evento por banda).
 - Si los datos no alcanzan (volumen o historia), se usa una regla simple (recencia, frecuencia, monto), marcada como tal en pantalla.
 - Se recalcula en un proceso nocturno. Todo puntaje guarda la versión del modelo y de la configuración.
@@ -160,7 +164,7 @@ Salud: los datos de prueba y el producto usan solo eventos administrativos (alta
 Cada hito cierra con un paquete de revisión para Marcelo: código, pruebas, guía de lo que hay que mirar y lista de decisiones tomadas por el agente.
 
 1. Cimientos (construido, pendiente de revisión de Marcelo): esquema multi-tenant, ingesta (CSV y conector de base de datos con sincronización incremental), mapeo y validación, configuración v1, generador de datos de las tres industrias. Aceptación: cargo un CSV o conecto una base de prueba y veo KPIs y funnel calculados desde la base, con el vocabulario del tenant; la segunda sincronización trae solo lo nuevo. Evidencia: 34 pruebas automáticas, todas pasan.
-2. Motor (construido, pendiente de revisión de Marcelo): variables, puntaje, bandas, backtest. Aceptación: lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada. Evidencia: 13 pruebas automáticas; AUC de retención contra la verdad sembrada 0,85 (servicios), 0,76 (salud), 0,81 (financiera).
+2. Motor (construido, pendiente de revisión de Marcelo): variables, puntaje, bandas, backtest. Aceptación: lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada. Evidencia: 16 pruebas automáticas; AUC de retención contra la verdad sembrada 0,86 (servicios), 0,77 (salud), 0,82 (financiera); calibración de retención dentro de la tolerancia en las tres industrias.
 3. Acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook. Aceptación: apruebo una campaña y obtengo la lista a ejecutar con tratamiento y control.
 4. Medición: resultados, intervalo, ROI, no concluyente. Aceptación: ciclo completo con datos de prueba; el resultado medido coincide con el efecto sembrado dentro del intervalo.
 5. Aplicación: shell único y pantallas de la sección 10, en paralelo desde el hito 1 (API con autenticación incluida; hoy solo hay línea de comandos).
@@ -182,6 +186,11 @@ Confirmadas por Diego (19/11/2026):
 10. El código se entrega por GitHub (repo `ddinoia/Datapulso`).
 11. Marcelo dedica 20 hs por semana.
 
+Confirmadas por Diego (20/11/2026), del hito 2:
+12. Qué predice el puntaje de cada etapa: puntaje alto = prioridad alta (ver sección 8).
+13. Horizonte de predicción por etapa (`ventana_prediccion_dias`; por defecto la ventana de medición).
+14. Bandas por terciles de cada día, mostrando siempre la probabilidad al lado de la banda.
+
 Confirmadas para lo técnico (a revisar por Marcelo):
 1. Stack: Postgres, API Python (FastAPI), jobs programados, scikit-learn o LightGBM, React con TypeScript, en AWS.
 2. Multi-tenant con RLS y gestión de secretos y accesos.
@@ -191,5 +200,4 @@ Confirmadas para lo técnico (a revisar por Marcelo):
 Abiertas:
 - Revisión de Marcelo del hito 1 (ver guía) y sus decisiones sobre los puntos marcados por el agente (por ejemplo, versionar el mapeo, cargas por lotes con reanudación).
 - Probar el conector contra MySQL 8 real (se probó con MariaDB 10.11).
-- Revisión de Marcelo del hito 2 (ver `docs/REVISION_HITO2.md`).
-- Para Diego (propuestas del agente en el hito 2, ver la guía, sección 3): qué predice el puntaje de cada etapa (puntaje alto = prioridad alta: riesgo de baja, de pago fuera de término y de no activar; oportunidad en uso y valor); horizonte de predicción por etapa (campo `ventana_prediccion_dias`, por defecto la ventana de medición); bandas por terciles de cada día o umbrales fijos de probabilidad.
+- Revisión de Marcelo del hito 2 (ver `docs/REVISION_HITO2.md`), incluida la tolerancia de calibración propuesta por el agente: por banda, |predicho − observado| ≤ máx(3 puntos; 2 errores estándar).

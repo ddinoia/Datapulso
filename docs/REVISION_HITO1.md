@@ -1,6 +1,6 @@
 # Hito 1 — guía de revisión para Marcelo
 
-Estado: listo para revisar. Construido por un agente de código a partir de `producto_datapulso_v0.md` (v0.2).
+Estado: listo para revisar. Construido por un agente de código a partir de la definición de producto v0.2 (en ese momento `producto_datapulso_v0.md`; hoy la fuente de verdad es `PRODUCTO.md` en este repositorio).
 Todo lo que sigue es lo que hay que mirar y lo que el agente decidió por su cuenta (sección 3), para que lo valides o lo cambies.
 
 ## 1. Criterio de aceptación y evidencia
@@ -17,7 +17,12 @@ Todo lo que sigue es lo que hay que mirar y lo que el agente decidió por su cue
 | Aislamiento por tenant (RLS), rol de la app sin BYPASSRLS, config inmutable, secretos cifrados | `tests/test_aislamiento_config.py` |
 | Datos de prueba reproducibles, con señal sembrada, marcados `is_demo`, sin datos clínicos en salud | `tests/test_kpis_generador.py` (generador) |
 
-Resultado de la última corrida: **34 pruebas, todas pasan** (≈45 s con PostgreSQL 16 y MariaDB 10.11 locales).
+Resultado de la corrida al cerrar el hito 1: **34 pruebas, todas pasan** (≈45 s con PostgreSQL 16 y MariaDB 10.11 locales).
+Al cerrar el hito 2 se corrigió un error del generador de datos de prueba y se agregó su prueba (`test_ciclo_final_sin_actividad_inflada`): las pruebas de los archivos del hito 1 pasan a ser 35 y siguen pasando todas. Detalle en `docs/REVISION_HITO2.md`.
+
+### Verificación de Diego (20/11/2026)
+
+Diego corrió el hito 1 en Windows con Docker Desktop y verificó la demo por CSV, los KPIs y el reporte de calidad de datos. Eso es lo único verificado de su lado. No hay registro de `pytest` ni de la demo por conexión a base de datos en Windows.
 
 ## 2. Cómo correrlo
 
@@ -46,10 +51,10 @@ Ordenadas por impacto si te parecen mal:
 
 - API y pantallas (hito 5). Por eso no hay autenticación todavía: no se expuso nada por HTTP.
 - Puntaje, recomendaciones, acciones y medición (hitos 2 a 4). El efecto de una acción **no** está aplicado en los datos de prueba; lo aplicará el simulador de resultados del hito 4 (el parámetro está en `verdad_sembrada.json`).
-- `docker-compose.yml` **no se probó** (el entorno de construcción no tiene Docker). Se probó con PostgreSQL 16 y **MariaDB 10.11** (compatible con MySQL, pero no es MySQL 8: probar el conector contra MySQL 8.4 real, sobre todo la autenticación `caching_sha2_password`).
+- `docker-compose.yml` **no lo probó el agente** (el entorno de construcción no tiene Docker). Diego usó Docker Desktop en Windows para su verificación del 20/11 (ver sección 1); no quedó registrado si el servicio MySQL del compose se usó. Se probó con PostgreSQL 16 y **MariaDB 10.11** (compatible con MySQL, pero no es MySQL 8: probar el conector contra MySQL 8.4 real, sobre todo la autenticación `caching_sha2_password`).
 - SQL Server y Oracle no están soportados (decisión de producto: arrancar con PostgreSQL y MySQL).
 - No se probó rendimiento ni consumo de memoria con más de 400.000 filas por carga.
-- GitHub: el acceso desde la sesión del agente no estaba habilitado; el código se entrega como repositorio git local (bundle) para subirlo.
+- GitHub: al construir el hito 1 el acceso desde la sesión del agente no estaba habilitado y el código se entregó como bundle. Desde el hito 2 el código se entrega directamente en el repositorio `ddinoia/Datapulso`.
 
 ## 5. Qué mirar primero en la revisión (≈ 2 horas)
 

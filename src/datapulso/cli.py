@@ -3,6 +3,7 @@
   migrar                         crea la base, el rol de la app y aplica migraciones
   generar-datos  INDUSTRIA       genera CSV de prueba (servicios | salud | financiera)
   demo INDUSTRIA                 crea una organización de demo y la carga por la tubería real (csv o bd)
+  tenants                        lista las organizaciones: nombre, id, industria, demo, versión de config, fecha de alta
   kpis TENANT                    muestra KPIs y funnel calculados desde la base (TENANT = nombre o id)
   calidad TENANT                 resumen de calidad y últimas cargas
   config-pendientes TENANT       qué falta configurar (ROI obligatorio)
@@ -55,6 +56,7 @@ def main(argv=None) -> None:
     d = sp.add_parser("demo"); d.add_argument("industria"); d.add_argument("--via", default="csv", choices=["csv", "bd"])
     d.add_argument("--motor", default="postgresql", choices=["postgresql", "mysql"]); d.add_argument("--clientes", type=int)
     d.add_argument("--semilla", type=int, default=7); d.add_argument("--estilo", default="iso", choices=["iso", "ar"])
+    sp.add_parser("tenants")
     for n in ("kpis", "calidad", "config-pendientes"):
         x = sp.add_parser(n); x.add_argument("tenant")
     pu = sp.add_parser("puntuar"); pu.add_argument("tenant"); pu.add_argument("--etapa")
@@ -84,6 +86,18 @@ def main(argv=None) -> None:
         with tenant_conn(r["tenant_id"]) as c:
             _imprimir_kpis(kpis.calcular(c))
         print("\ntenant:", r["tenant_id"])
+    elif a.cmd == "tenants":
+        # Operación de administración: lista todas las organizaciones (el rol de la app solo ve la suya por RLS).
+        with admin_conn() as c:
+            filas = c.execute("""SELECT nombre, id, industria, is_demo, config_version_activa, creado_en
+                                 FROM tenants ORDER BY creado_en, nombre""").fetchall()
+        if not filas:
+            print("No hay organizaciones. Crear una con `datapulso demo <industria>`.")
+        else:
+            print(f"{'nombre':<34} {'id':<36}  {'industria':<11} {'demo':<4}  config  creado")
+            for r in filas:
+                print(f"{r['nombre']:<34} {str(r['id']):<36}  {r['industria']:<11} {'sí' if r['is_demo'] else 'no':<4}  "
+                      f"v{r['config_version_activa'] or '-':<5} {r['creado_en']:%Y-%m-%d %H:%M}")
     elif a.cmd == "kpis":
         from . import kpis
         with tenant_conn(_tenant_id(a.tenant)) as c:
@@ -159,8 +173,8 @@ def main(argv=None) -> None:
             for f in filas:
                 extra = f" · {seg}: {f['atributos'].get(seg)}" if seg and f["atributos"].get(seg) else ""
                 emp = f" · empresa {f['empresa']}" if f["empresa"] else ""
-                print(f"\n  {f['id_externo']}  {cfg.vocabulario.puntaje} {float(f['puntaje']):.3f}  "
-                      f"{t('banda.' + f['banda'])}{extra}{emp}")
+                print(f"\n  {f['id_externo']}  {presentacion.texto_banda(f['banda'], f['puntaje'], f['metodo'])}"
+                      f"{extra}{emp}")
                 for d in f["drivers"][:3]:
                     print(f"     - {presentacion.texto_driver(d)}")
 

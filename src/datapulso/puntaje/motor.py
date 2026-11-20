@@ -2,16 +2,21 @@
 
 Línea de tiempo (R = último día con datos, H = horizonte de la etapa, paso = 30 días):
 
-    entrenamiento del backtest        evaluación          hoy
-    c = R-2H, R-2H-30, ...            c = R-H             R
-    |---- etiquetas observadas hasta R-H ----|-- etiqueta de evaluación observada hasta R --|
+    entrenamiento del backtest       calibración                 evaluación     hoy
+    c <= R-3H-60, cada 30 días       c = R-2H-60, R-2H-30, R-2H  c = R-H        R
 
-1. Backtest (entrenar en el pasado, evaluar en el futuro): el modelo se entrena con cortes cuya etiqueta ya se
-   conocía en R-H y se evalúa en el corte R-H, cuya etiqueta se conoce recién en R. Se reporta AUC, tasa del
-   evento por banda y la comparación con la regla simple sobre el mismo período.
-2. Modelo de producción: mismo procedimiento corrido H días más adelante (cortes R-H, R-H-30, ...) para usar
-   la información más reciente. La calidad que se informa es la del backtest.
-3. Puntaje del día: población puntuable a R, probabilidad, bandas por terciles y drivers.
+   Cada corte necesita H días para conocer su etiqueta: la del entrenamiento se conoce antes del primer corte
+   de calibración, la de calibración en R-H y la de evaluación recién en R. Nada de lo que se usa para ajustar
+   mira la evaluación.
+
+1. Backtest (entrenar en el pasado, evaluar en el futuro): el modelo se entrena con los cortes de entrenamiento,
+   se mide su calibración en los cortes de calibración (si no cumple la tolerancia se ajusta Platt ahí) y se evalúa
+   en R-H. Se reporta AUC, tasa del evento y probabilidad predicha contra observada por banda, y la comparación
+   con la regla simple sobre el mismo período.
+2. Modelo de producción: mismo procedimiento corrido H días más adelante (calibración en R-H-60, R-H-30 y R-H;
+   entrenamiento antes) para usar la información más reciente. La calidad que se informa es la del backtest.
+3. Puntaje del día: población puntuable a R, probabilidad (calibrada si correspondió), bandas por terciles y
+   drivers.
 
 Si los datos no alcanzan (sin historia para el backtest o pocos casos del evento), se usa la regla simple y queda
 marcado `metodo = 'regla'` con el motivo.
@@ -35,10 +40,19 @@ MIN_NEGATIVOS = 30             # clientes distintos sin el evento
 MIN_FILAS = 200                # clientes distintos en total
 MIN_EVAL = 10                   # casos mínimos de cada clase en la evaluación para informar AUC
 REENTRENAR_DIAS = 30            # el proceso nocturno reentrena si el modelo vigente tiene más de esto
+CORTES_CALIBRACION = 3          # la calibración se mide (y Platt se ajusta) con 3 cortes mensuales juntos: con uno solo
+                                # se persigue la variación de un mes (en cobranza la tasa fluctúa ±3 puntos)
 
 
-def _cortes(desde: date, minimo: date) -> list[date]:
-    return [c for c in (desde - timedelta(days=PASO_DIAS * k) for k in range(MAX_CORTES)) if c >= minimo]
+def _cortes(desde: date, minimo: date, n: int = MAX_CORTES) -> list[date]:
+    return [c for c in (desde - timedelta(days=PASO_DIAS * k) for k in range(n)) if c >= minimo]
+
+
+def _linea_de_tiempo(c_cal: date, h: int, minimo: date) -> tuple[list[date], list[date]]:
+    """(cortes de calibración, cortes de entrenamiento) para un último corte de calibración `c_cal`."""
+    cal = _cortes(c_cal, minimo, CORTES_CALIBRACION)
+    primero = c_cal - timedelta(days=PASO_DIAS * (CORTES_CALIBRACION - 1))
+    return cal, _cortes(primero - timedelta(days=h), minimo)
 
 
 def _inicio_datos(conn) -> date | None:
@@ -68,16 +82,11 @@ def _armar(conn, etapa, cfg, spec, cortes, h) -> tuple[pd.DataFrame, pd.Series, 
     return pd.concat(Xs), pd.concat(ys), resumen
 
 
-def _bandas(p: np.ndarray) -> np.ndarray:
-    """Terciles por orden (empates resueltos por orden de llegada): tercio superior = alta."""
-    if len(p) == 0:
-        return np.array([], dtype=object)
-    r = pd.Series(p).rank(method="first", ascending=False).values
-    n = len(p)
-    return np.where(r <= np.ceil(n / 3), "alta", np.where(r <= np.ceil(2 * n / 3), "media", "baja"))
+_bandas = modelo.bandas_terciles
 
 
-def _metricas(y: pd.Series, p: np.ndarray) -> dict:
+def _metricas(y: pd.Series, p: np.ndarray, probabilidad: bool = True) -> dict:
+    """`probabilidad=False` para la regla simple: su puntaje es un percentil, no una probabilidad."""
     pos, neg = int(y.sum()), int(len(y) - y.sum())
     out = {"n": int(len(y)), "positivos": pos, "tasa_base": round(pos / len(y), 4) if len(y) else None}
     b = _bandas(p)
@@ -91,6 +100,8 @@ def _metricas(y: pd.Series, p: np.ndarray) -> dict:
         out["lift_banda_alta"] = round(alta / out["tasa_base"], 2) if out["tasa_base"] else None
     else:
         out["auc"] = None
+    if probabilidad:
+        out["calibracion"] = modelo.calibracion(y, p)
     return out
 
 
@@ -118,28 +129,39 @@ def entrenar(conn, etapa: str, fecha: date | None = None, actor: str = "sistema"
     ini = _inicio_datos(conn)
     minimo = ini + timedelta(days=HISTORIA_MIN_DIAS)
     c_eval = R - timedelta(days=h)
-    cortes_bt = _cortes(c_eval - timedelta(days=h), minimo)
-    cortes_prod = _cortes(c_eval, minimo)
+    cal_bt, cortes_bt = _linea_de_tiempo(c_eval - timedelta(days=h), h, minimo)     # backtest
+    cal_prod, cortes_prod = _linea_de_tiempo(c_eval, h, minimo)                     # producción
 
     avisos, metodo, motivo_metodo = [], "modelo", None
     calidad: dict = {"horizonte_dias": h}
-    if not cortes_bt or c_eval < minimo:
+    if not cortes_bt or len(cal_bt) < CORTES_CALIBRACION:
         metodo, motivo_metodo = "regla", t("calidad.sin_historia")
     else:
         Xtr, ytr, res_tr = _armar(conn, etapa, cfg, spec, cortes_bt, h)
+        Xca, yca, res_ca = _armar(conn, etapa, cfg, spec, cal_bt, h)
         Xev, yev, res_ev = _armar(conn, etapa, cfg, spec, [c_eval], h)
-        calidad["backtest"] = {"cortes_entrenamiento": res_tr, "corte_evaluacion": res_ev}
+        calidad["backtest"] = {"cortes_entrenamiento": res_tr, "cortes_calibracion": res_ca, "corte_evaluacion": res_ev}
         motivo_metodo = _suficiente(ytr) if len(ytr) else t("calidad.sin_historia")
         if motivo_metodo or yev.empty:
             metodo = "regla"
             motivo_metodo = motivo_metodo or t("calidad.sin_historia")
         else:
-            p_bt = modelo.ajustar(Xtr, ytr)
+            p_bt = modelo.ajustar_calibrado(Xtr, ytr, Xca, yca)
             prob, _ = modelo.predecir(p_bt, Xev)
             regla_bt = modelo.ajustar_regla(etapa, Xtr)
             prob_r, _ = modelo.predecir_regla(regla_bt, Xev)
             calidad["backtest"]["modelo"] = _metricas(yev, prob)
-            calidad["backtest"]["regla"] = _metricas(yev, prob_r)
+            calidad["backtest"]["modelo"]["calibracion_aplicada"] = {
+                k: v for k, v in p_bt["calibracion"].items() if k != "medicion_cruda"}
+            if p_bt["calibracion"]["metodo"] != "ninguna":     # para comparar: la misma evaluación sin calibrar
+                crudo, _ = modelo.predecir({**p_bt, "calibracion": None}, Xev)
+                calidad["backtest"]["modelo"]["calibracion_sin_ajuste"] = modelo.calibracion(yev, crudo)
+            calidad["backtest"]["regla"] = _metricas(yev, prob_r, probabilidad=False)
+            cal = calidad["backtest"]["modelo"]["calibracion"]
+            if not cal["evaluable"]:
+                avisos.append(t("calidad.calibracion_no_evaluable"))
+            elif not cal["cumple"]:
+                avisos.append(t("calidad.mal_calibrado", error=round(100 * cal["error_max"], 1)))
             auc_m, auc_r = calidad["backtest"]["modelo"]["auc"], calidad["backtest"]["regla"]["auc"]
             if auc_m is None:
                 avisos.append(t("calidad.no_evaluable"))
@@ -148,8 +170,10 @@ def entrenar(conn, etapa: str, fecha: date | None = None, actor: str = "sistema"
 
     if metodo == "modelo":
         Xp, yp, res_p = _armar(conn, etapa, cfg, spec, cortes_prod, h)
-        params = modelo.ajustar(Xp, yp)
-        entrenamiento = {"cortes": res_p, "filas": int(len(yp)), "positivos": int(yp.sum())}
+        Xpc, ypc, res_pc = _armar(conn, etapa, cfg, spec, cal_prod, h)
+        params = modelo.ajustar_calibrado(Xp, yp, Xpc, ypc)
+        entrenamiento = {"cortes": res_p, "filas": int(len(yp)), "positivos": int(yp.sum()),
+                         "cortes_calibracion": res_pc, "calibracion": params["calibracion"]["metodo"]}
     else:
         # La regla no necesita etiqueta: se calibra (percentiles) sobre la población de hoy.
         X_hoy = variables.calcular(conn, R, spec, etapas.poblacion(conn, etapa, cfg, R))
