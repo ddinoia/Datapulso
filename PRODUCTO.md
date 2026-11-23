@@ -1,9 +1,10 @@
-# DataPulso — Definición de producto v0.3
+# DataPulso — Definición de producto v0.4
 
 Estado: decisiones de producto confirmadas por Diego el 19/11/2026 y el 20/11/2026 (ver sección 15). Dueño de producto: Diego. Dueño técnico: Marcelo (CTO, part-time, 20 hs por semana).
 Modo de desarrollo: todo el código lo desarrollan agentes; Marcelo lo revisa después de cada hito.
 Reemplaza como fuente de verdad a los demos HTML (que se descartan; solo valen como referencia de requisitos).
 Avance: hitos 1 y 2 construidos y listos para revisión de Marcelo; guías en `docs/REVISION_HITO1.md` y `docs/REVISION_HITO2.md`. Diego verificó el hito 1 en Windows con Docker Desktop el 20/11/2026 (demo por CSV, KPIs y calidad de datos).
+Novedad v0.4 (20/11/2026): se incorpora el contraste entre lo proyectado y lo medido (secciones 8, 9, 10 y 14), idea de Diego.
 
 ## 1. Qué es
 
@@ -17,7 +18,7 @@ Se vende la solución completa. En cada piloto el cliente elige qué etapa medir
 
 Dentro: hitos 1 a 4 (ver sección 14) más una aplicación mínima con Panorama, Clientes, Acciones, Resultados, Configuración y Datos. La entrada de datos incluye CSV y conexión directa a bases de datos (PostgreSQL y MySQL) desde el primer hito.
 
-Fuera del MVP (después): conectores por API, otros motores de base de datos (SQL Server, Oracle), consulta en lenguaje natural, alertas con contexto externo, forecast, WhatsApp/email integrados, portal para clientes del cliente, optimización por uplift.
+Fuera del MVP (después): aprendizaje con ajuste propuesto del impacto esperado a partir de lo medido (el contraste proyectado vs real sí entra en el MVP), conectores por API, otros motores de base de datos (SQL Server, Oracle), consulta en lenguaje natural, alertas con contexto externo, forecast, WhatsApp/email integrados, portal para clientes del cliente, optimización por uplift.
 
 ## 3. Vocabulario unificado
 
@@ -46,9 +47,9 @@ Todas las tablas llevan `tenant_id`. Aislamiento por fila (RLS) desde el día 1.
 - `config_versions`: id, tenant_id, version, contenido (jsonb), creado_por, fecha. Nunca se edita una versión: se crea otra.
 - `puntajes`: entidad_id, etapa, fecha, puntaje, banda, drivers (jsonb), modelo_version.
 - `acciones_catalogo`: ver sección 7.
-- `corridas`: id, accion_id, creada_por, aprobada_por, estado, fecha_lanzamiento, pct_control, semilla, config_version.
+- `corridas`: id, accion_id, creada_por, aprobada_por, estado, fecha_lanzamiento, pct_control, semilla, config_version, proyeccion (jsonb, congelada al aprobar: tasa esperada sin acción, efecto esperado, valor y ROI esperados, versión del modelo y de la configuración; no se puede editar).
 - `corrida_entidades`: corrida_id, entidad_id, grupo [tratamiento|control], contactado_ts, estado.
-- `resultados`: corrida_id, ventana_dias, n_trat, n_ctrl, tasa_trat, tasa_ctrl, diferencia, ic_inf, ic_sup, valor_incremental, costo, roi, concluyente.
+- `resultados`: corrida_id, ventana_dias, n_trat, n_ctrl, tasa_trat, tasa_ctrl, diferencia, ic_inf, ic_sup, valor_incremental, costo, roi, concluyente; y el contraste con la proyección: desvío del modelo (tasa esperada sin acción vs tasa real del control) y desvío de la acción (efecto esperado vs diferencia medida).
 - `auditoria`: quién, qué, cuándo (config, aprobaciones, lanzamientos, exportaciones).
 
 ### Ingesta: una sola tubería, varios tipos de fuente
@@ -108,6 +109,7 @@ Recomendación inicial: reglas (banda × segmento → acciones elegibles, ordena
 - Bandas por terciles de la población puntuada cada día, con la probabilidad siempre al lado de la banda. Con la regla simple no hay probabilidad y se dice explícitamente.
 - La calibración (probabilidad predicha contra tasa observada, por banda) se mide en el backtest y se informa junto con la calidad; si no cumple la tolerancia, se avisa que la probabilidad es orientativa.
 - Entrenamiento y backtest temporal (entrenar en el pasado, evaluar en el futuro); se muestra la calidad real (por ejemplo, tasa del evento por banda).
+- Probabilidades calibradas: "30% de riesgo" debe significar que cerca del 30% efectivamente tiene el evento. El backtest muestra la calibración (probabilidad predicha vs tasa observada por banda), no solo el orden.
 - Si los datos no alcanzan (volumen o historia), se usa una regla simple (recencia, frecuencia, monto), marcada como tal en pantalla.
 - Se recalcula en un proceso nocturno. Todo puntaje guarda la versión del modelo y de la configuración.
 
@@ -120,13 +122,16 @@ Recomendación inicial: reglas (banda × segmento → acciones elegibles, ordena
 5. Tamaño mínimo: el producto calcula el efecto mínimo detectable con el tamaño de cada grupo; si no alcanza, el resultado se muestra como "no concluyente" y no se reporta ahorro.
 6. Casos sin control posible (acciones obligatorias): se muestra antes y después, marcado como "no causal".
 7. Control en cobranza: tamaño chico (5%) o prueba entre dos acciones en lugar de contra "nada". Se decide por acción.
+8. Proyectado vs real: al aprobar una corrida se congela la proyección; al cerrar la medición se contrastan (a) lo que el modelo esperaba sin acción contra lo que le pasó al control y (b) el efecto esperado de la acción contra la diferencia medida entre tratados y control, siempre con intervalos de confianza.
+9. Un resultado "no concluyente" se muestra, pero no se usa para ajustar ninguna expectativa.
+10. Aprendizaje (después del MVP): con resultados concluyentes el producto propone ajustar el impacto esperado de cada acción de forma gradual y una persona aprueba el ajuste; nada se reentrena ni se ajusta solo.
 
 ## 10. Pantallas del MVP
 
 - Panorama: KPIs por etapa activa, funnel y segmentos.
 - Clientes: lista con puntaje, banda, drivers y acción recomendada; detalle por cliente (con empresa y sus usuarios si hay jerarquía; las pantallas de jerarquía vienen después del modelo).
 - Acciones: catálogo, cola de aprobación, corridas e historial, exportación de listas.
-- Resultados: por corrida, tratamiento contra control, diferencia con intervalo, ROI y estado (concluyente o no).
+- Resultados: por corrida, tratamiento contra control, diferencia con intervalo, ROI y estado (concluyente o no); gráfico de proyectado vs real (sin acción y efecto de la acción) con el desvío de cada uno.
 - Configuración: todo lo de la sección 5.
 - Datos: fuentes (CSV o base de datos), mapeo, reporte de calidad, historial de cargas y sincronizaciones.
 
@@ -164,9 +169,9 @@ Salud: los datos de prueba y el producto usan solo eventos administrativos (alta
 Cada hito cierra con un paquete de revisión para Marcelo: código, pruebas, guía de lo que hay que mirar y lista de decisiones tomadas por el agente.
 
 1. Cimientos (construido, pendiente de revisión de Marcelo): esquema multi-tenant, ingesta (CSV y conector de base de datos con sincronización incremental), mapeo y validación, configuración v1, generador de datos de las tres industrias. Aceptación: cargo un CSV o conecto una base de prueba y veo KPIs y funnel calculados desde la base, con el vocabulario del tenant; la segunda sincronización trae solo lo nuevo. Evidencia: 34 pruebas automáticas, todas pasan.
-2. Motor (construido, pendiente de revisión de Marcelo): variables, puntaje, bandas, backtest. Aceptación: lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada. Evidencia: 16 pruebas automáticas; AUC de retención contra la verdad sembrada 0,86 (servicios), 0,77 (salud), 0,82 (financiera); calibración de retención dentro de la tolerancia en las tres industrias.
-3. Acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook. Aceptación: apruebo una campaña y obtengo la lista a ejecutar con tratamiento y control.
-4. Medición: resultados, intervalo, ROI, no concluyente. Aceptación: ciclo completo con datos de prueba; el resultado medido coincide con el efecto sembrado dentro del intervalo.
+2. Motor (construido, pendiente de revisión de Marcelo): variables, puntaje calibrado, bandas, backtest. Aceptación: lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada y las probabilidades están calibradas (predicho vs observado por banda dentro de una tolerancia acordada con Marcelo). Tolerancia (propuesta, a validar por Marcelo): en cada banda, el predicho no se aparta del observado más de 3 puntos porcentuales, o de 2 errores estándar si la banda es chica. Hoy Cobranza en servicios no la cumple (5,6 puntos en la banda alta contra una tolerancia de 3,7; ver `docs/REVISION_HITO2.md`). Evidencia: 16 pruebas automáticas; AUC de retención contra la verdad sembrada 0,86 (servicios), 0,77 (salud), 0,82 (financiera); calibración de retención dentro de la tolerancia en las tres industrias.
+3. Acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook. Aceptación: apruebo una campaña y obtengo la lista a ejecutar con tratamiento y control; al aprobar queda guardada la proyección congelada, y no se puede modificar después.
+4. Medición: resultados, intervalo, ROI, no concluyente. Aceptación: ciclo completo con datos de prueba; el resultado medido coincide con el efecto sembrado dentro del intervalo; el gráfico de proyectado vs real muestra ambos desvíos.
 5. Aplicación: shell único y pantallas de la sección 10, en paralelo desde el hito 1 (API con autenticación incluida; hoy solo hay línea de comandos).
 
 Las fechas dependen de la cadencia de revisión de Marcelo (20 hs por semana). Cada hito debe poder revisarse en una sesión corta (la guía del hito 1 estima unas 2 horas).
@@ -186,10 +191,11 @@ Confirmadas por Diego (19/11/2026):
 10. El código se entrega por GitHub (repo `ddinoia/Datapulso`).
 11. Marcelo dedica 20 hs por semana.
 
-Confirmadas por Diego (20/11/2026), del hito 2:
-12. Qué predice el puntaje de cada etapa: puntaje alto = prioridad alta (ver sección 8).
-13. Horizonte de predicción por etapa (`ventana_prediccion_dias`; por defecto la ventana de medición).
-14. Bandas por terciles de cada día, mostrando siempre la probabilidad al lado de la banda.
+Confirmadas por Diego (20/11/2026):
+12. Proyectado vs real entra en el MVP (hitos 2 a 4). El aprendizaje con ajuste propuesto y aprobado por una persona queda para después del MVP.
+13. Qué predice el puntaje de cada etapa: puntaje alto = prioridad alta (ver sección 8).
+14. Horizonte de predicción por etapa (`ventana_prediccion_dias`; por defecto la ventana de medición).
+15. Bandas por terciles de cada día, mostrando siempre la probabilidad al lado de la banda.
 
 Confirmadas para lo técnico (a revisar por Marcelo):
 1. Stack: Postgres, API Python (FastAPI), jobs programados, scikit-learn o LightGBM, React con TypeScript, en AWS.
