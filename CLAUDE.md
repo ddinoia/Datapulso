@@ -1,6 +1,6 @@
 # DataPulso — contexto para el agente de código
 
-Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y `docs/REVISION_HITO1.md` (estado y decisiones del hito 1).
+Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las guías `docs/REVISION_HITO1.md` y `docs/REVISION_HITO2.md` (estado y decisiones de cada hito). La definición vigente es la v0.4.
 
 ## Quién es quién
 - Diego Di Noia: dueño de producto. Habla español rioplatense (voseo). Conversá con él en español; el código, los comentarios y los textos de producto también van en español (el MVP es solo ES, con textos en archivos).
@@ -9,7 +9,10 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y `docs/R
 
 ## Estado
 - Hito 1 (cimientos) construido y pendiente de revisión de Marcelo.
-- Siguiente: hito 2 (motor de puntaje: variables, puntaje explicable, bandas, backtest temporal). Criterio de aceptación en `PRODUCTO.md`, sección 14.
+- Hito 1 verificado por Diego en Windows con Docker Desktop el 20/11/2026 (demo por CSV, KPIs y calidad de datos).
+- Hito 2 (motor de puntaje) construido y pendiente de revisión de Marcelo. Sus tres decisiones de producto las aprobó Diego el 20/11/2026 (qué predice cada puntaje, horizonte por etapa, bandas por terciles con la probabilidad siempre al lado). Calibración medida y documentada en `docs/REVISION_HITO2.md`.
+- Decisión del 20/11: el contraste proyectado vs real entra en los hitos 2 a 4. En el hito 2 hay que dejar las probabilidades calibradas y guardar versión de modelo y de configuración en cada puntaje.
+- Siguiente: hito 3 (acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook). Criterio de aceptación en `PRODUCTO.md`, sección 14.
 
 ## Reglas que no se rompen
 - Toda tabla de negocio lleva `tenant_id` y RLS. La app usa el rol `datapulso_app` (sin BYPASSRLS); nunca el rol admin.
@@ -18,17 +21,22 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y `docs/R
 - Salud: solo eventos administrativos. Nada de diagnósticos ni datos clínicos.
 - La "verdad sembrada" del generador (`verdad_sembrada.json`) nunca se carga en las tablas del producto.
 - Acciones que cambian algo en el sistema del cliente nunca se ejecutan solas; requieren aprobación humana.
-- La configuración es versionada e inmutable: se crea otra versión, no se edita.
+- La configuración es versionada e inmutable: se crea otra versión, no se edita. Lo mismo los modelos de puntaje.
+- Una variable del puntaje "a la fecha c" usa solo lo conocido al final del día c (sin fuga). Si cambiás el cálculo de una variable, subí `VERSION_VARIABLES` en `puntaje/variables.py`.
+- Textos de producto nuevos van en `src/datapulso/textos/es.json`, no en el código.
+- La banda de un puntaje se muestra siempre con su probabilidad al lado; con la regla simple se dice que no hay probabilidad.
+- No afirmes en las guías más de lo verificado: distinguí lo que probó el agente, lo que verificó Diego y lo que nadie probó.
 
 ## Cómo correr
 ```bash
 pip install -e '.[dev]'
-scripts/dev_env.sh start      # PostgreSQL 16 (55432) y MariaDB/MySQL (53306) locales (usa runuser; necesita root)
+scripts/dev_env.sh start      # PostgreSQL 16 (55432) y MariaDB/MySQL (53306) locales (usa runuser; necesita root;
+                               # si falta MariaDB: apt-get install -y mariadb-server)
 export DATAPULSO_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 datapulso migrar
-pytest                         # 34 pruebas del hito 1
+pytest                         # 51 pruebas (35 en archivos del hito 1 + 16 del hito 2), ≈ 3 min
 ```
-Si no tenés Docker ni permisos de root, adaptá `scripts/dev_env.sh` o usá `docker-compose.yml` (no probado).
+Si no tenés permisos de root, adaptá `scripts/dev_env.sh` o usá `docker compose up -d`. En Windows: README, sección "Windows (PowerShell)".
 
 ## Al cerrar un hito
 Actualizá `docs/REVISION_HITO<n>.md` con: evidencia de cada criterio de aceptación, decisiones tomadas por el agente (ordenadas por impacto), qué no está y qué no se pudo probar. Sé explícito con lo que no probaste.

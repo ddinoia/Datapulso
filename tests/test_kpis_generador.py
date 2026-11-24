@@ -130,3 +130,17 @@ def test_verdad_no_esta_en_las_tablas_del_producto():
     ds = generar("servicios", 4, 60)
     cols = set(ds.entidades.columns) | set(ds.eventos.columns) | set(ds.pagos.columns)
     assert not ({"riesgo_latente", "se_dio_de_baja", "no_activa", "z"} & cols)
+
+
+def test_ciclo_final_sin_actividad_inflada():
+    """La actividad diaria del último tramo de la historia (ciclo cortado por el corte) no supera a la de los
+    meses anteriores para los mismos clientes vigentes: la tasa mensual se prorratea por los días del ciclo."""
+    ds = generar("financiera", 7, 1500)
+    ev, ent = ds.eventos, ds.entidades
+    vig = set(ent[(ent["tipo"] == "persona") & ent["fecha_baja"].isna()
+                  & (pd.to_datetime(ent["fecha_alta"]) < pd.Timestamp(ds.corte) - pd.Timedelta(days=200))]["id_externo"])
+    e = ev[ev["entidad"].isin(vig) & (ev["tipo"] == "consulta_app")]
+    fin = pd.Timestamp(ds.corte) + pd.Timedelta(days=1)
+    ultimos = ((e["ts"] >= fin - pd.Timedelta(days=30)) & (e["ts"] < fin)).sum() / 30
+    previos = ((e["ts"] >= fin - pd.Timedelta(days=120)) & (e["ts"] < fin - pd.Timedelta(days=30))).sum() / 90
+    assert 0.85 < ultimos / previos < 1.15, (ultimos, previos)

@@ -1,0 +1,49 @@
+{
+  "banda": {"alta": "Alta prioridad", "media": "Media prioridad", "baja": "Baja prioridad"},
+  "metodo": {
+    "modelo": "Modelo (regresión logística)",
+    "regla": "Regla simple (recencia, frecuencia, monto): los datos no alcanzan para un modelo"
+  },
+  "evento_modelado": {
+    "retencion": "se dé de baja en los próximos {h} días",
+    "retencion_inactividad": "quede inactivo en los próximos {h} días (no hay fecha de baja en los datos)",
+    "cobranza": "pague fuera de término algún comprobante que vence en los próximos {h} días",
+    "activacion": "no active dentro de los {h} días desde el alta",
+    "uso_valor": "alcance el nivel de uso y valor en los próximos {h} días"
+  },
+  "variable": {
+    "antiguedad_dias": "Antigüedad (días)",
+    "tiene_empresa": "Pertenece a una empresa",
+    "dias_sin_eventos": "Días desde el último evento",
+    "eventos_90d": "Eventos en los últimos 90 días",
+    "monto_90d": "Monto en los últimos 90 días",
+    "n90": "Eventos «{tipo}» en los últimos 90 días",
+    "sin90": "Ningún evento «{tipo}» en los últimos 90 días",
+    "tendencia": "Eventos «{tipo}»: últimos 30 días contra los 60 anteriores",
+    "ticket90": "Monto promedio por «{tipo}» en los últimos 90 días",
+    "pct_tarde_180d": "Comprobantes pagados tarde o impagos (últimos 180 días)",
+    "atraso_prom_180d": "Días de atraso promedio (últimos 180 días)",
+    "impagas_vencidas": "Comprobantes vencidos impagos",
+    "atributo": "{atributo}"
+  },
+  "probabilidad": {
+    "valor": "probabilidad {pct} %",
+    "no_disponible": "sin probabilidad (regla simple: el puntaje ordena, no estima)"
+  },
+  "calibracion": {
+    "cumple": "dentro de la tolerancia",
+    "no_cumple": "fuera de la tolerancia",
+    "no_evaluable": "no evaluable (pocos clientes por banda)",
+    "metodo_ninguna": "sin ajuste",
+    "metodo_platt": "ajustada con Platt"
+  },
+  "sentido": {"sube": "sube el puntaje", "baja": "baja el puntaje"},
+  "calidad": {
+    "sin_historia": "No hay historia suficiente para un backtest temporal",
+    "pocos_eventos": "Pocos casos para entrenar: {n} clientes, {pos} con el evento y {neg} sin el evento (mínimo 200, 30 y 30)",
+    "no_evaluable": "El período de evaluación tiene pocos casos: la calidad no se puede medir con confianza",
+    "modelo_peor_que_regla": "En el backtest el modelo no supera a la regla simple: revisar datos y configuración",
+    "calibracion_no_evaluable": "Pocos clientes por banda en la evaluación: no se puede afirmar que la probabilidad esté calibrada",
+    "mal_calibrado": "En el backtest la probabilidad predicha se aparta de la observada más de lo tolerado (error máximo {error} puntos): tomar la probabilidad como orientativa"
+  }
+}

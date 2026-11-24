@@ -23,6 +23,10 @@ class EtapaCfg(BaseModel):
     activa: bool = True
     evento_objetivo: Regla | None = None
     ventana_medicion_dias: int = Field(30, ge=1, le=365)
+    # Hito 2. Horizonte del puntaje: "probabilidad de que pase X en los próximos N días".
+    # Si falta (versiones de configuración anteriores), se usa la ventana de medición: el puntaje predice
+    # lo mismo que después se mide. En activación y uso y valor el horizonte sale de la regla (`dias`).
+    ventana_prediccion_dias: int | None = Field(None, ge=7, le=365)
 
 
 class Vocabulario(BaseModel):
