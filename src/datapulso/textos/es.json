@@ -1,5 +1,9 @@
 {
-  "banda": {"alta": "Alta prioridad", "media": "Media prioridad", "baja": "Baja prioridad"},
+  "banda": {
+    "alta": "Alta prioridad",
+    "media": "Media prioridad",
+    "baja": "Baja prioridad"
+  },
   "metodo": {
     "modelo": "Modelo (regresión logística)",
     "regla": "Regla simple (recencia, frecuencia, monto): los datos no alcanzan para un modelo"
@@ -37,7 +41,10 @@
     "metodo_ninguna": "sin ajuste",
     "metodo_platt": "ajustada con Platt"
   },
-  "sentido": {"sube": "sube el puntaje", "baja": "baja el puntaje"},
+  "sentido": {
+    "sube": "sube el puntaje",
+    "baja": "baja el puntaje"
+  },
   "calidad": {
     "sin_historia": "No hay historia suficiente para un backtest temporal",
     "pocos_eventos": "Pocos casos para entrenar: {n} clientes, {pos} con el evento y {neg} sin el evento (mínimo 200, 30 y 30)",
@@ -45,5 +52,62 @@
     "modelo_peor_que_regla": "En el backtest el modelo no supera a la regla simple: revisar datos y configuración",
     "calibracion_no_evaluable": "Pocos clientes por banda en la evaluación: no se puede afirmar que la probabilidad esté calibrada",
     "mal_calibrado": "En el backtest la probabilidad predicha se aparta de la observada más de lo tolerado (error máximo {error} puntos): tomar la probabilidad como orientativa"
+  },
+  "acciones": {
+    "estado": {
+      "borrador": "Borrador",
+      "pendiente_aprobacion": "Pendiente de aprobación",
+      "aprobada": "Aprobada",
+      "lanzada": "Lanzada",
+      "medicion_en_curso": "Medición en curso",
+      "cerrada": "Cerrada",
+      "cancelada": "Cancelada"
+    },
+    "tipo": {
+      "mensaje": "Mensaje",
+      "oferta_beneficio": "Oferta o beneficio",
+      "tarea_humana": "Tarea humana",
+      "lista_llamadas": "Lista de llamadas",
+      "webhook": "Webhook"
+    },
+    "rol": {
+      "administrador": "Administrador",
+      "analista": "Analista",
+      "aprobador": "Aprobador",
+      "solo_lectura": "Solo lectura"
+    },
+    "grupo": {
+      "tratamiento": "Tratamiento",
+      "control": "Control"
+    },
+    "exclusion": {
+      "corrida_abierta": "ya está en otra corrida abierta de la misma etapa",
+      "lista_exclusion": "está en la lista de exclusión",
+      "sin_consentimiento": "no dio consentimiento de contacto",
+      "frecuencia_maxima": "recibió esta acción hace menos de {dias} días",
+      "tope_contactos": "llegó al tope de {tope} contactos en 30 días"
+    },
+    "impacto_supuesto": "supuesto, no medido",
+    "impacto_medido": "medido",
+    "modifica_sistema": "cambia algo en el sistema del cliente: DataPulso no lo ejecuta, requiere confirmación humana",
+    "motivo_recomendacion": "ROI esperado {roi} = probabilidad {p} × impacto {i} ({origen}) × valor {v} − costo {c} · banda {banda} · {segmento}",
+    "motivo_sin_valor": "eventos evitados esperados {ev} por cliente (probabilidad {p} × impacto {i}, {origen}); falta el valor económico para el ROI · banda {banda} · {segmento}",
+    "aviso_no_concluyente": "Con {nt} tratados y {nc} de control el efecto mínimo detectable es ≈ {emd} puntos y el esperado es {esp} puntos: es probable que el resultado sea \"no concluyente\"",
+    "error": {
+      "permiso": "El usuario '{usuario}' (rol {rol}) no puede {permiso}",
+      "usuario": "No existe el usuario activo '{usuario}' en esta organización",
+      "estado": "La corrida {numero} está en estado «{estado}»: para {operacion} tiene que estar en {esperado}",
+      "sin_valor": "No se puede aprobar: falta el valor económico de un resultado en la etapa «{etapa}». Cargarlo con `datapulso valor-economico`",
+      "puntajes_viejos": "Los puntajes de la corrida se calcularon hace {dias} días (máximo {max}): recalcular (`datapulso puntuar`), cancelar esta corrida y crear otra",
+      "sin_probabilidad": "Los puntajes de «{etapa}» usan la regla simple y no tienen probabilidad: no se puede proyectar una corrida",
+      "sin_puntajes": "No hay puntajes de «{etapa}»: correr `datapulso puntuar` primero",
+      "cuatro_ojos": "La configuración exige cuatro ojos: quien aprueba no puede ser quien creó la corrida",
+      "sin_clientes": "No quedan clientes para la corrida después de la elegibilidad y la política de contacto",
+      "grupos_chicos": "Con {n} clientes y {pct} % de control no hay al menos un cliente en cada grupo",
+      "sin_salida": "La organización no habilitó una salida para «{tipo}»: no se emite nada",
+      "tipo_no_emitible": "Las acciones de tipo «{tipo}» se ejecutan con la exportación, no por webhook",
+      "fecha_lanzamiento": "La fecha de lanzamiento tiene que estar entre la aprobación ({desde}) y hoy ({hasta})",
+      "url": "La URL del webhook tiene que ser https (http solo para localhost en pruebas)"
+    }
   }
 }

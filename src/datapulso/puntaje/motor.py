@@ -44,6 +44,20 @@ CORTES_CALIBRACION = 3          # la calibración se mide (y Platt se ajusta) co
                                 # se persigue la variación de un mes (en cobranza la tasa fluctúa ±3 puntos)
 
 
+def _no_predictivos(cfg) -> tuple[str, ...]:
+    return (cfg.politica_contacto.atributo_consentimiento,)
+
+
+def huella_config(cfg, etapa: str) -> str:
+    """Huella de la parte de la configuración que cambia el modelo de una etapa (su regla, horizonte, gracia de
+    cobranza y atributos excluidos). Cambiar el valor económico, el catálogo o la política de contacto crea otra
+    versión de configuración pero no obliga a reentrenar."""
+    import hashlib
+    parte = {"etapa": cfg.etapas[etapa].model_dump(), "gracia": cfg.cobranza.gracia_dias,
+             "no_predictivos": list(_no_predictivos(cfg))}
+    return hashlib.sha256(json.dumps(parte, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def _cortes(desde: date, minimo: date, n: int = MAX_CORTES) -> list[date]:
     return [c for c in (desde - timedelta(days=PASO_DIAS * k) for k in range(n)) if c >= minimo]
 
@@ -121,7 +135,7 @@ def entrenar(conn, etapa: str, fecha: date | None = None, actor: str = "sistema"
     """Backtest + entrenamiento. Crea una versión nueva (inmutable) en `modelos` y la devuelve."""
     version_cfg, cfg = config_activa(conn)
     R = fecha or fecha_corte_por_defecto(conn)
-    spec = variables.descubrir(conn, cfg.cobranza.gracia_dias)
+    spec = variables.descubrir(conn, cfg.cobranza.gracia_dias, _no_predictivos(cfg))
     motivo = etapas.puntuable(etapa, cfg, spec)
     if motivo:
         raise ValueError(f"No se puede puntuar '{etapa}': {motivo}")
@@ -187,6 +201,7 @@ def entrenar(conn, etapa: str, fecha: date | None = None, actor: str = "sistema"
     version = f"{etapa}-v{num}"
     definicion = {"etapa": etapa, "evento_modelado": etapas.evento_modelado(etapa, spec), "horizonte_dias": h,
                   "variables": spec, "version_variables": variables.VERSION_VARIABLES,
+                  "huella_config": huella_config(cfg, etapa),
                   "entrenamiento": entrenamiento, "paso_dias": PASO_DIAS}
     demo = conn.execute("SELECT is_demo FROM tenants").fetchone()["is_demo"]
     conn.execute("""INSERT INTO modelos (tenant_id, version, etapa, numero, metodo, motivo_metodo, fecha_referencia,
@@ -246,11 +261,12 @@ def puntuar(conn, etapa: str, fecha: date | None = None, modelo_version: str | N
 
 
 def proceso_nocturno(conn, fecha: date | None = None, forzar_entrenamiento: bool = False, actor: str = "proceso_nocturno") -> list[dict]:
-    """Para cada etapa puntuable: reentrena si no hay modelo, si cambió la configuración, si cambió el cálculo de
-    variables o si el modelo tiene más de REENTRENAR_DIAS; después puntúa. Pensado para correr una vez por día por tenant."""
+    """Para cada etapa puntuable: reentrena si no hay modelo, si cambió la parte de la configuración que afecta al
+    modelo de esa etapa (`huella_config`), si cambió el cálculo de variables o si el modelo tiene más de
+    REENTRENAR_DIAS; después puntúa. Los puntajes guardan siempre la versión de configuración vigente. Pensado para correr una vez por día por tenant."""
     version_cfg, cfg = config_activa(conn)
     R = fecha or fecha_corte_por_defecto(conn)
-    spec = variables.descubrir(conn, cfg.cobranza.gracia_dias)
+    spec = variables.descubrir(conn, cfg.cobranza.gracia_dias, _no_predictivos(cfg))
     salida = []
     for etapa in etapas.PUNTUABLES:
         motivo = etapas.puntuable(etapa, cfg, spec)
@@ -258,7 +274,8 @@ def proceso_nocturno(conn, fecha: date | None = None, forzar_entrenamiento: bool
             salida.append({"etapa": etapa, "omitida": motivo})
             continue
         m = modelo_vigente(conn, etapa)
-        entreno = (forzar_entrenamiento or m is None or m["config_version"] != version_cfg
+        entreno = (forzar_entrenamiento or m is None
+                   or m["definicion"].get("huella_config") != huella_config(cfg, etapa)
                    or not vigente_para_variables(m) or (R - m["fecha_referencia"]).days > REENTRENAR_DIAS)
         try:
             if entreno:

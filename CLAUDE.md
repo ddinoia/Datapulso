@@ -1,6 +1,6 @@
 # DataPulso — contexto para el agente de código
 
-Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las guías `docs/REVISION_HITO1.md` y `docs/REVISION_HITO2.md` (estado y decisiones de cada hito). La definición vigente es la v0.4.
+Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las guías `docs/REVISION_HITO1.md`, `docs/REVISION_HITO2.md` y `docs/REVISION_HITO3.md` (estado y decisiones de cada hito). La definición vigente es la v0.4.
 
 ## Quién es quién
 - Diego Di Noia: dueño de producto. Habla español rioplatense (voseo). Conversá con él en español; el código, los comentarios y los textos de producto también van en español (el MVP es solo ES, con textos en archivos).
@@ -8,11 +8,13 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las gu�
 - Todo el desarrollo lo hace el agente. Las definiciones de producto no se cambian sin que Diego las confirme: si algo no está definido, proponé una opción y marcala como decisión pendiente.
 
 ## Estado
-- Hitos 1 (cimientos) y 2 (motor de puntaje) construidos, en `main` y pendientes de revisión de Marcelo. Pruebas a hoy: 51, todas pasan (35 en archivos del hito 1 + 16 del hito 2).
+- Hitos 1 (cimientos) y 2 (motor de puntaje) construidos, en `main` y pendientes de revisión de Marcelo.
+- Hito 3 (acciones y corridas) construido y pendiente de revisión de Marcelo, con decisiones D1 a D9 de Diego (24/11/2026) y decisiones del agente marcadas [pendiente] en `docs/REVISION_HITO3.md`. El hito 3 cambió un comportamiento del hito 2: el proceso nocturno reentrena solo si cambia la parte de la configuración que afecta al modelo (`huella_config`).
+- Pruebas a hoy: 65, todas pasan (35 en archivos del hito 1 + 16 del hito 2 + 14 del hito 3).
 - Hito 1 verificado por Diego en Windows con Docker Desktop el 20/11/2026 (demo por CSV, KPIs y calidad de datos).
 - Hito 2: sus tres decisiones de producto las aprobó Diego el 20/11/2026 (qué predice cada puntaje, horizonte por etapa, bandas por terciles con la probabilidad siempre al lado). El criterio de calibración cumple parcialmente: 7 de 8 combinaciones medibles dentro de la tolerancia propuesta (cobranza en servicios no cumple), y la tolerancia está pendiente de validación por Marcelo. Ver `docs/REVISION_HITO2.md`.
 - Decisión del 20/11: el contraste proyectado vs real entra en los hitos 2 a 4. En el hito 2 hay que dejar las probabilidades calibradas y guardar versión de modelo y de configuración en cada puntaje.
-- Siguiente: hito 3 (acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook). Criterio de aceptación en `PRODUCTO.md`, sección 14.
+- Siguiente: hito 4 (medición: simulador del efecto sembrado, resultados con intervalo, ROI, no concluyente, proyectado vs real). Criterio de aceptación en `PRODUCTO.md`, sección 14. No empezar sin el visto bueno de Diego.
 
 ## Reglas que no se rompen
 - Toda tabla de negocio lleva `tenant_id` y RLS. La app usa el rol `datapulso_app` (sin BYPASSRLS); nunca el rol admin.
@@ -21,6 +23,8 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las gu�
 - Salud: solo eventos administrativos. Nada de diagnósticos ni datos clínicos.
 - La "verdad sembrada" del generador (`verdad_sembrada.json`) nunca se carga en las tablas del producto.
 - Acciones que cambian algo en el sistema del cliente nunca se ejecutan solas; requieren aprobación humana.
+- Una corrida aprobada no se modifica: proyección, lista, grupos y diseño quedan congelados (triggers en `003_acciones.sql`). Las corridas no se borran: se cancelan con motivo.
+- Nada sale (exportación, webhook) sin una corrida aprobada, y la emisión es siempre un comando explícito de una persona.
 - La configuración es versionada e inmutable: se crea otra versión, no se edita. Lo mismo los modelos de puntaje.
 - Una variable del puntaje "a la fecha c" usa solo lo conocido al final del día c (sin fuga). Si cambiás el cálculo de una variable, subí `VERSION_VARIABLES` en `puntaje/variables.py`.
 - Textos de producto nuevos van en `src/datapulso/textos/es.json`, no en el código.
@@ -34,7 +38,7 @@ scripts/dev_env.sh start      # PostgreSQL 16 (55432) y MariaDB/MySQL (53306) lo
                                # si falta MariaDB: apt-get install -y mariadb-server)
 export DATAPULSO_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 datapulso migrar
-pytest                         # 51 pruebas (35 en archivos del hito 1 + 16 del hito 2), ≈ 3 min
+pytest                         # 65 pruebas (35 + 16 del hito 2 + 14 del hito 3), ≈ 4 min
 ```
 Si no tenés permisos de root, adaptá `scripts/dev_env.sh` o usá `docker compose up -d`. En Windows: README, sección "Windows (PowerShell)".
 

@@ -19,6 +19,8 @@ import pandas as pd
 from .industrias import Industria, INDUSTRIAS, nombre_col, plantilla_mapeos
 
 CORTE_DEFECTO = date(2026, 10, 31)
+ATRIBUTO_CONSENTIMIENTO = "consentimiento_contacto"
+PCT_CONSENTIMIENTO = 0.92
 MESES_HISTORIA = 24
 _D = np.timedelta64(1, "D")
 
@@ -147,9 +149,13 @@ def generar(industria: str, semilla: int = 7, n_clientes: int | None = None, cor
                          "estado": np.where(se_fue, "baja", "activo")})
     for nm in cols_attr:
         pers[nm] = attrs[nm]
+    # Consentimiento de contacto (hito 3, política de contacto). Generador aparte: no altera el resto de los datos
+    # de la misma semilla. Independiente del riesgo: es un permiso, no un comportamiento.
+    rng_consent = np.random.default_rng(semilla + 7919)
+    pers[ATRIBUTO_CONSENTIMIENTO] = np.where(rng_consent.random(n) < PCT_CONSENTIMIENTO, "si", "no")
     emp = pd.DataFrame({"id_externo": ids_emp, "tipo": "empresa", "empresa": None, "fecha_alta": emp_alta.astype("datetime64[D]"),
                         "fecha_baja": np.datetime64("NaT", "D"), "estado": "activo"})
-    for nm in cols_attr:
+    for nm in cols_attr + [ATRIBUTO_CONSENTIMIENTO]:
         emp[nm] = None
     ent = pd.concat([emp, pers], ignore_index=True)
     ent["modificado_en"] = (pd.to_datetime(ent["fecha_baja"].fillna(ent["fecha_alta"])) + pd.Timedelta(hours=12))

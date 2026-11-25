@@ -53,9 +53,20 @@ class ValorEconomico(BaseModel):
 
 
 class PoliticaContacto(BaseModel):
-    max_contactos_por_cliente_30d: int = Field(2, ge=0)
+    """Se aplica antes de asignar tratamiento y control (hito 3, D6)."""
+    max_contactos_por_cliente_30d: int = Field(2, ge=0, description="contactos de tratamiento en los últimos 30 días")
     consentimiento_requerido: bool = True
-    exclusiones: list[str] = Field(default_factory=list)
+    atributo_consentimiento: str = Field("consentimiento_contacto",
+                                         description="atributo de la entidad; valores sí: si, sí, true, 1, s")
+    exclusiones: list[str] = Field(default_factory=list, description="id externos que nunca se contactan")
+    horario_contacto: str = Field("09:00-20:00", description="dato para la exportación; DataPulso no contacta")
+
+
+class AccionesCfg(BaseModel):
+    """Hito 3: corridas, aprobación y proyección."""
+    antiguedad_max_puntajes_dias: int = Field(7, ge=1, le=60, description="más viejos: recalcular antes de aprobar")
+    cuatro_ojos: bool = Field(False, description="si es true, quien aprueba no puede ser quien creó la corrida")
+    rango_impacto: float = Field(0.5, ge=0, le=1, description="rango del efecto esperado: impacto × (1 ± esto)")
 
 
 class ConfigTenant(BaseModel):
@@ -69,6 +80,7 @@ class ConfigTenant(BaseModel):
     bandas: Literal["terciles"] = "terciles"
     valor_economico: ValorEconomico = Field(default_factory=ValorEconomico)
     politica_contacto: PoliticaContacto = Field(default_factory=PoliticaContacto)
+    acciones: AccionesCfg = Field(default_factory=AccionesCfg)
 
     @field_validator("etapas")
     @classmethod

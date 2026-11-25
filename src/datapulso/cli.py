@@ -15,6 +15,11 @@ Hito 2 (motor de puntaje):
   modelo TENANT --etapa E        versión vigente del modelo: qué predice, método y calidad del backtest
   clientes TENANT --etapa E      lista de clientes con puntaje, banda y drivers
      [--banda alta|media|baja] [--limite N]
+
+Hito 3 (acciones y corridas): ver `datapulso/cli_acciones.py` o `datapulso <comando> -h`.
+  usuarios, usuario-alta, catalogo, valor-economico, salida-webhook, recomendar, corrida-crear,
+  corrida-pedir-aprobacion, cola-aprobacion, corrida-aprobar, corrida-cancelar, corrida-exportar,
+  corrida-emitir, corrida-lanzar, corridas, corrida
 """
 import argparse
 import json
@@ -65,7 +70,11 @@ def main(argv=None) -> None:
     mo = sp.add_parser("modelo"); mo.add_argument("tenant"); mo.add_argument("--etapa", required=True)
     cl = sp.add_parser("clientes"); cl.add_argument("tenant"); cl.add_argument("--etapa", required=True)
     cl.add_argument("--banda", choices=["alta", "media", "baja"]); cl.add_argument("--limite", type=int, default=20)
+    from . import cli_acciones
+    cli_acciones.registrar(sp)
     a = ap.parse_args(argv)
+    if a.cmd in cli_acciones.COMANDOS:
+        return cli_acciones.ejecutar(a, tenant_conn, _tenant_id)
 
     if a.cmd == "migrar":
         from .migrate import migrate

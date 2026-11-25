@@ -1,4 +1,4 @@
-# DataPulso — hitos 1 (cimientos) y 2 (motor de puntaje)
+# DataPulso — hitos 1 (cimientos), 2 (motor de puntaje) y 3 (acciones y corridas)
 
 Plataforma de ciclo de vida del cliente: analiza → entiende → recomienda → acciona → mide contra control.
 - **Hito 1** (`docs/REVISION_HITO1.md`): esquema multi-tenant con RLS, configuración versionada, ingesta por CSV y por
@@ -8,6 +8,10 @@ Plataforma de ciclo de vida del cliente: analiza → entiende → recomienda →
   variables a fecha de corte sin fuga, regresión logística explicable con drivers por cliente, regla simple de respaldo,
   bandas por terciles con la probabilidad al lado, backtest temporal, calibración medida (y Platt si hace falta)
   y proceso nocturno.
+
+- **Hito 3** (`docs/REVISION_HITO3.md`): catálogo de acciones versionado, recomendación por ROI esperado,
+  política de contacto, corridas con tratamiento y control estratificados, cola de aprobación, proyección congelada
+  e inmutable al aprobar, exportación con hash y webhook firmado (HMAC) con reintentos e idempotencia.
 
 La definición de producto es `PRODUCTO.md` (fuente de verdad); el contexto para agentes de código, `CLAUDE.md`.
 
@@ -23,15 +27,16 @@ datapulso demo servicios --via bd --motor mysql   # ...o por conexión a una bas
 datapulso tenants                                 # organizaciones: nombre, id, industria, demo, config, fecha
 datapulso puntuar "<tenant>"                      # backtest + entrenamiento + puntajes de todas las etapas
 datapulso clientes "<tenant>" --etapa retencion    # lista con puntaje, banda y drivers
-pytest                                            # pruebas de aceptación de los hitos 1 y 2
+datapulso catalogo "<tenant>" --cargar-plantilla --usuario admin   # hito 3: ver docs/REVISION_HITO3.md, sección 2
+pytest                                            # pruebas de aceptación de los hitos 1 a 3
 ```
 
 ## Windows (PowerShell)
 
 Requisitos: Python 3.11 o superior (con la opción "Add python.exe to PATH"), Git y Docker Desktop abierto.
 Diego verificó el hito 1 en Windows con Docker Desktop el 20/11/2026: demo por CSV, KPIs y calidad de datos.
-El resto no se probó en Windows: `datapulso tenants` (nuevo), la demo por conexión a MySQL, el puntaje del hito 2
-y `pytest`.
+El resto no se probó en Windows: `datapulso tenants`, la demo por conexión a MySQL, el puntaje del hito 2,
+los comandos del hito 3 y `pytest`.
 
 ```powershell
 # 1. Código y entorno de Python
@@ -81,6 +86,9 @@ Notas:
 | `db/migrations/002_puntaje.sql` | Tablas `modelos` (inmutable) y `puntajes`, con RLS |
 | `src/datapulso/puntaje/` | Variables, etapas (qué se predice), modelo y regla, motor (backtest, proceso nocturno), presentación |
 | `src/datapulso/textos/es.json` | Textos de producto del hito 2 (MVP solo español) |
+| `db/migrations/003_acciones.sql` | Usuarios, catálogo, corridas, listas, salidas y entregas; triggers de inmutabilidad |
+| `src/datapulso/acciones/` | Catálogo, política de contacto, recomendación, corridas y proyección, exportación, webhook |
+| `src/datapulso/cli_acciones.py` | Comandos del hito 3 |
 | `tests/` | Aislamiento, ingesta, conector incremental, KPIs contra cálculo independiente, puntaje contra la verdad sembrada |
 
 Todo dato de prueba lleva `is_demo = true`. El producto no escribe nunca en la base del cliente.

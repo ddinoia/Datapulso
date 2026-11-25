@@ -220,7 +220,9 @@ def test_proceso_nocturno_reentrena_solo_cuando_hace_falta(servicios):
         crear_version_config(c, cfg, "prueba", nota="horizonte de retención 60 días")
         c.commit()
         r2 = {r["etapa"]: r for r in motor.proceso_nocturno(c)}
-        assert all(r["entrenado"] and r["config_version"] == cv + 1 for r in r2.values())
+        # solo se reentrena la etapa cuya parte de la configuración cambió; todas puntúan con la versión nueva
+        assert r2["retencion"]["entrenado"] and not any(r["entrenado"] for e, r in r2.items() if e != "retencion")
+        assert all(r["config_version"] == cv + 1 for r in r2.values())
         m = motor.modelo_vigente(c, "retencion")
         assert m["definicion"]["horizonte_dias"] == 60 and m["config_version"] == cv + 1
         n = c.execute("SELECT count(DISTINCT modelo_version) AS n FROM puntajes WHERE etapa='retencion'").fetchone()["n"]

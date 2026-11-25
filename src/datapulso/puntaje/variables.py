@@ -53,9 +53,11 @@ def fin_dia(d: date, tz: str) -> datetime:
     return inicio_dia(d + timedelta(days=1), tz)
 
 
-def descubrir(conn, gracia: int) -> dict:
+def descubrir(conn, gracia: int, excluir_atributos: tuple[str, ...] = ()) -> dict:
     """Qué variables existen para este tenant (tipos de evento, atributos, pagos). Se guarda con el modelo para que
-    el puntaje de mañana use exactamente las mismas variables que el entrenamiento."""
+    el puntaje de mañana use exactamente las mismas variables que el entrenamiento.
+    `excluir_atributos`: atributos que no son comportamiento y no deben entrar al modelo (el consentimiento de
+    contacto de la política de contacto es un permiso, no una señal de riesgo)."""
     tipos = conn.execute("""SELECT tipo, count(*) AS n, count(monto) AS con_monto FROM eventos
                             GROUP BY tipo HAVING count(*) >= 20 ORDER BY count(*) DESC, tipo""").fetchall()
     tipos = tipos[:MAX_TIPOS]
@@ -72,7 +74,8 @@ def descubrir(conn, gracia: int) -> dict:
         "tipos": [r["tipo"] for r in tipos],
         "tipos_monto": [r["tipo"] for r in tipos if r["con_monto"] >= 0.5 * r["n"]],
         "atributos": [r["key"] for r in attrs
-                      if 2 <= r["niveles"] <= MAX_NIVELES_ATRIBUTO and (r["cobertura"] or 0) >= 0.5],
+                      if 2 <= r["niveles"] <= MAX_NIVELES_ATRIBUTO and (r["cobertura"] or 0) >= 0.5
+                      and r["key"] not in excluir_atributos],
         "pagos": bool(hay["pagos"]), "empresa": bool(hay["empresa"]), "hay_bajas": bool(hay["bajas"]),
         "gracia": gracia,
     }

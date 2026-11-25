@@ -122,7 +122,7 @@ def nombre_col(ind: Industria, tabla: str, interna: str) -> str:
 def plantilla_mapeos(ind: Industria) -> dict:
     """Mapeos listos para crear las 3 fuentes (CSV o base de datos) de una industria."""
     n = lambda t, c: nombre_col(ind, t, c)
-    attrs = list(ind.atributos.keys())
+    attrs = list(ind.atributos.keys()) + ["consentimiento_contacto"]   # ver generador.ATRIBUTO_CONSENTIMIENTO
     return {
         "entidades": {
             "destino": "entidades",

@@ -186,7 +186,7 @@ Tomadas por el agente (para validar), ordenadas por impacto:
     - Los niveles de un atributo se suman en un solo driver, y lo mismo el indicador "ningún evento" con la cantidad de eventos del mismo tipo.
     - Se guardan los 5 principales y se muestran 3.
     - En la base quedan neutros al idioma; el texto sale de `textos/es.json`. **Los textos del hito 1 siguen en el código.**
-12. **Reentrenamiento.** El proceso nocturno reentrena si no hay modelo, si cambió la versión de configuración, si cambió el cálculo de variables (`VERSION_VARIABLES`) o si el modelo tiene más de 30 días. En los demás casos solo recalcula el puntaje, en unos 2,4 s. Los modelos entrenados antes de este cierre no tienen calibración guardada y se siguen pudiendo usar; se recomienda reentrenar con `datapulso puntuar <tenant> --reentrenar`.
+12. **Reentrenamiento.** El proceso nocturno reentrena si no hay modelo, si cambió la parte de la configuración que afecta al modelo de esa etapa (desde el hito 3; antes era cualquier cambio de versión, ver `docs/REVISION_HITO3.md`), si cambió el cálculo de variables (`VERSION_VARIABLES`) o si el modelo tiene más de 30 días. En los demás casos solo recalcula el puntaje, en unos 2,4 s. Los modelos entrenados antes de este cierre no tienen calibración guardada y se siguen pudiendo usar; se recomienda reentrenar con `datapulso puntuar <tenant> --reentrenar`.
 13. **Retención sin fecha de baja.** Si el tenant no informa fechas de baja, el evento pasa a ser "queda inactivo según la regla de retención". No se probó con datos reales.
 14. **Esquema** (`db/migrations/002_puntaje.sql`):
     - `modelos`: inmutable, con RLS. La app solo puede SELECT/INSERT y además hay un trigger.
