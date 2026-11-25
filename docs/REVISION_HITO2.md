@@ -7,7 +7,26 @@ La sección 3 lista lo que el agente decidió por su cuenta.
 
 ## 1. Criterio de aceptación y evidencia
 
-> "Lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada."
+> "Lista de clientes con puntaje y drivers; con datos de prueba, el modelo recupera la señal sembrada y las probabilidades están calibradas (predicho vs observado por banda dentro de una tolerancia acordada con Marcelo)." (`PRODUCTO.md` v0.4, sección 14)
+
+**Estado del criterio: cumple parcialmente; tolerancia pendiente de validación por Marcelo.**
+
+| Parte del criterio | Resultado |
+|---|---|
+| Lista de clientes con puntaje y drivers | Cumple |
+| El modelo recupera la señal sembrada | Cumple (AUC de retención contra la verdad: 0,86 / 0,77 / 0,82) |
+| Probabilidades calibradas dentro de la tolerancia | **Cumple parcialmente.** La tolerancia es una propuesta del agente: por banda, máx(3 puntos; 2 errores estándar). Todavía no está acordada con Marcelo |
+
+Detalle de la calibración por combinación industria × etapa: son 12 combinaciones (3 industrias × 4 etapas puntuables), con las demos de tamaño completo y semilla 7. Tabla completa en la sección "Calibración" más abajo.
+
+| Resultado | Cantidad | Combinaciones |
+|---|---|---|
+| Cumple la tolerancia | 7 | Retención en servicios, salud y financiera; cobranza en salud y financiera; uso y valor en servicios y financiera |
+| **No cumple** | **1** | **Cobranza en servicios**: 5,6 puntos en la banda alta contra 3,7 de tolerancia |
+| No evaluable | 3 | Activación en las tres industrias: bandas de 11 a 41 clientes, menos que el mínimo de 50 |
+| Sin probabilidad | 1 | Uso y valor en salud: usa la regla simple por falta de datos, y la regla no estima probabilidad |
+
+O sea: de las 8 combinaciones donde la calibración se pudo medir, 7 cumplen y 1 no.
 
 | Qué se pidió | Prueba que lo demuestra (`tests/test_puntaje.py`) |
 |---|---|
@@ -25,7 +44,7 @@ La sección 3 lista lo que el agente decidió por su cuenta.
 | Comando `datapulso tenants` (nombre, id, industria, demo, versión de config, fecha) | `test_comando_tenants_lista_las_organizaciones` |
 | El generador ya no infla la actividad del último ciclo (error encontrado al medir la calibración, ver la sección 3) | `tests/test_kpis_generador.py::test_ciclo_final_sin_actividad_inflada` |
 
-Resultado de la última corrida: **51 pruebas, todas pasan**: 35 en los archivos del hito 1 (34 originales más la del generador) y 16 del hito 2. Tardan ≈ 2 min 40 s con PostgreSQL 16 y MariaDB 10.11 locales.
+Resultado de la última corrida del hito 2: **51 pruebas, todas pasan**: 35 en los archivos del hito 1 (34 originales más la del generador) y 16 del hito 2. Tardan ≈ 2 min 40 s con PostgreSQL 16 y MariaDB 10.11 locales.
 
 ### Números con las demos de tamaño completo (semilla 7)
 

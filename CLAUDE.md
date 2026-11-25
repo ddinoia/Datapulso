@@ -8,9 +8,9 @@ Leé primero `PRODUCTO.md` (definición de producto, fuente de verdad) y las gu�
 - Todo el desarrollo lo hace el agente. Las definiciones de producto no se cambian sin que Diego las confirme: si algo no está definido, proponé una opción y marcala como decisión pendiente.
 
 ## Estado
-- Hito 1 (cimientos) construido y pendiente de revisión de Marcelo.
+- Hitos 1 (cimientos) y 2 (motor de puntaje) construidos, en `main` y pendientes de revisión de Marcelo. Pruebas a hoy: 51, todas pasan (35 en archivos del hito 1 + 16 del hito 2).
 - Hito 1 verificado por Diego en Windows con Docker Desktop el 20/11/2026 (demo por CSV, KPIs y calidad de datos).
-- Hito 2 (motor de puntaje) construido y pendiente de revisión de Marcelo. Sus tres decisiones de producto las aprobó Diego el 20/11/2026 (qué predice cada puntaje, horizonte por etapa, bandas por terciles con la probabilidad siempre al lado). Calibración medida y documentada en `docs/REVISION_HITO2.md`.
+- Hito 2: sus tres decisiones de producto las aprobó Diego el 20/11/2026 (qué predice cada puntaje, horizonte por etapa, bandas por terciles con la probabilidad siempre al lado). El criterio de calibración cumple parcialmente: 7 de 8 combinaciones medibles dentro de la tolerancia propuesta (cobranza en servicios no cumple), y la tolerancia está pendiente de validación por Marcelo. Ver `docs/REVISION_HITO2.md`.
 - Decisión del 20/11: el contraste proyectado vs real entra en los hitos 2 a 4. En el hito 2 hay que dejar las probabilidades calibradas y guardar versión de modelo y de configuración en cada puntaje.
 - Siguiente: hito 3 (acciones: catálogo, elegibilidad, recomendación, cola con aprobación, política de contacto, exportación y webhook). Criterio de aceptación en `PRODUCTO.md`, sección 14.
 
